@@ -1,5 +1,5 @@
 // MySmartBox Service Worker – Netzwerk zuerst, offline aus dem Cache
-const CACHE = 'mysmartbox-1.0.0';
+const CACHE = 'mysmartbox-1.1.0';
 const ASSETS = ['./', './index.html', './box.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './jazm-logo.png'];
 
 self.addEventListener('install', e => {

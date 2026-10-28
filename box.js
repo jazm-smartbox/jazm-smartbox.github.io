@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.1.0';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -107,7 +107,7 @@ function showLock(auto){
   const was=!!KEY;
   if(was){try{hooks.flush&&hooks.flush()}catch{}try{const dr=hooks.stash&&hooks.stash();if(dr){META.draft=dr;save({clean:true})}}catch{}}
   KEY=null;STATE=null;try{$('#bxdlg').open&&$('#bxdlg').close()}catch{}
-  setFan(false);
+  setFan(false);try{const sh=$('#bxsheet');sh.classList.remove('show');sh.hidden=true;document.body.classList.remove('bxsheet-open')}catch{}
   if(was&&hooks.close)hooks.close();
   const has=!!vaultJson,L=$('#lock');
   $('#verLock').textContent='Version '+APP_VERSION;
@@ -309,7 +309,7 @@ async function watchRun(repo,tok,sha){
 /* ---------- Bereiche in „Haus & Daten“ ---------- */
 function securityHtml(){
   const bio=bioSupported()&&lsGet(BKEY);
-  return `<h2 class="sec">Sicherheit</h2><div class="list"><div class="roomrow"><span class="n">🔒 Verschlüsselt mit AES-256 · sperrt nach 5 Min. ohne Eingabe oder 1 Min. im Hintergrund. Fingerabdruck ${bio?'an':'aus'}.</span></div>
+  return `<h2 class="sec">Sicherheit</h2><div class="list"><div class="roomrow"><span class="n">Passwort gesetzt · Fingerabdruck ${bio?'an':'aus'}</span></div>
     <div class="roomrow bkrow">${bioSupported()?(bio?'<button class="btn small" data-box="bio-off">Fingerabdruck aus</button>':'<button class="btn small primary" data-box="bio-on">Fingerabdruck einrichten</button>'):''}<button class="btn small" data-box="pw">Passwort ändern</button><button class="btn small" data-box="lock">Jetzt sperren</button><button class="btn small danger" data-box="wipe">Alle Daten löschen</button></div></div>
     <p class="note">Alle Daten liegen verschlüsselt auf diesem Gerät. Ohne dein Passwort kann sie niemand lesen – auch nicht in der GitHub-Sicherung.</p>`;
 }
@@ -329,6 +329,62 @@ function updateHtml(){
 }
 function refresh(){try{hooks.refresh&&hooks.refresh()}catch{}}
 
+/* ---------- Menü „Daten & Sicherheit“ als Blatt von unten (wie MyBelegBox / MyGesundBox) ---------- */
+const SVG=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const SHEET_META={
+  'Sicherheit':[SVG('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),()=>'Passwort · Fingerabdruck '+(bioSupported()&&lsGet(BKEY)?'an':'aus')],
+  'Datensicherung':[SVG('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),()=>(bkCfg()?(bkStat.err?'GitHub ⚠️ Problem':'GitHub an'):'GitHub aus')+' · '+(META.lastFile?'Datei '+new Date(META.lastFile+'T00:00').toLocaleDateString('de-DE'):'keine Datei')],
+  'App-Update':[SVG('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'),()=>'Version '+APP_VERSION+' · '+(META.github?'GitHub verbunden':'nicht verbunden')],
+  'Darstellung':[SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),()=>'Muster, Animationen, Vibration'],
+  'Drucken & Exportieren':[SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>'),()=>'Geräteliste als PDF, Tabelle, QR-Aufkleber'],
+  'Änderungsverlauf':[SVG('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'),()=>'Was wann geändert wurde']};
+const sheetOpen=()=>!$('#bxsheet').hidden;
+function sheetFill(){
+  const b=$('#bxsbody');if(!b)return;b.innerHTML=hooks.sheetHtml?hooks.sheetHtml():'';
+  try{hooks.decorate&&hooks.decorate(b)}catch{}
+  b.querySelectorAll('.acchd').forEach(h=>{const m=SHEET_META[h.dataset.k];if(!m)return;const t=h.querySelector('span');
+    h.insertAdjacentHTML('afterbegin',`<span class="ai">${m[0]}</span>`);if(t)t.outerHTML=`<span class="at">${esc(h.dataset.k)}<small>${esc(m[1]())}</small></span>`});
+  $('#bxver2').textContent='MySmartBox · Version '+APP_VERSION;
+}
+function openSheet(){setFan(false);const sh=$('#bxsheet');sheetFill();sh.hidden=false;$('#bxspanel').scrollTop=0;document.body.classList.add('bxsheet-open');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>sh.classList.add('show')));buzz(6)}
+function closeSheet(){const sh=$('#bxsheet');if(!sh||sh.hidden)return;sh.classList.remove('show');document.body.classList.remove('bxsheet-open');
+  const p=$('#bxspanel');p.style.transform='';setTimeout(()=>{if(!sh.classList.contains('show'))sh.hidden=true},matchMedia('(prefers-reduced-motion: reduce)').matches?0:300)}
+function sheetRefresh(){if(!sheetOpen())return;const p=$('#bxspanel'),y=p.scrollTop;sheetFill();p.scrollTop=y}
+const seg=v=>`<div class="bxseg" role="tablist"><button type="button" role="tab" data-box="seg" data-v="home" aria-selected="${v==='home'}">Übersicht</button><button type="button" role="tab" data-box="seg" data-v="stats" aria-selected="${v==='stats'}">Statistik</button></div>`;
+/* Blatt nach unten wegwischen */
+(()=>{let y0=0,dy=0,on=false;const p=()=>$('#bxspanel');
+  document.addEventListener('touchstart',e=>{const pn=p();on=false;if(!pn||!sheetOpen()||!pn.contains(e.target)||e.touches.length!==1)return;
+    if(pn.scrollTop>0||e.target.closest('input,textarea,select'))return;on=true;y0=e.touches[0].clientY;dy=0},{passive:true});
+  document.addEventListener('touchmove',e=>{if(!on)return;dy=e.touches[0].clientY-y0;if(dy<0){dy=0}p().style.transform=dy?`translateY(${dy}px)`:''},{passive:true});
+  document.addEventListener('touchend',()=>{if(!on)return;on=false;const pn=p();if(dy>120){buzz(6);closeSheet()}else{pn.style.transform=''}});
+})();
+
+/* ---------- Oben nach unten ziehen: aktualisieren (Update prüfen, Sicherung abgleichen) ---------- */
+let swReg=null,refreshing=false;
+(()=>{let P=null;const ptr=()=>$('#bxptr');
+  const skip=t=>t.closest('#bxsheet,.bxfan,.bxlock,dialog,input,textarea,select,#cwrap,#canvas,#s3d,.canvaswrap,.stack3d')||document.querySelector('#modal .panel,#rmodal .panel');
+  document.addEventListener('touchstart',e=>{P=null;if(!KEY||refreshing||e.touches.length!==1||window.scrollY>2||sheetOpen()||skip(e.target))return;P={x:e.touches[0].clientX,y:e.touches[0].clientY,mode:null,pull:0,hit:false}},{passive:true});
+  document.addEventListener('touchmove',e=>{if(!P)return;const t=e.touches[0],dx=t.clientX-P.x,dy=t.clientY-P.y;
+    if(!P.mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;if(dy>0&&Math.abs(dy)>Math.abs(dx)*1.5)P.mode='v';else{P=null;return}}
+    const pull=Math.min(110,dy*.5),el=ptr();P.pull=pull;el.style.opacity=String(Math.min(1,pull/28));el.style.transform=`translateY(${pull-52}px) rotate(${Math.min(1,pull/72)*300}deg)`;
+    const hit=pull>=70;if(hit!==P.hit){P.hit=hit;el.classList.toggle('armed',hit);if(hit)buzz(8)}},{passive:true});
+  const end=()=>{if(!P)return;const hit=P.hit&&P.mode==='v';P=null;if(hit)doRefresh();else hidePtr()};
+  document.addEventListener('touchend',end);document.addEventListener('touchcancel',end);
+})();
+function hidePtr(){const el=$('#bxptr');el.style.transform='';el.style.opacity='';el.classList.remove('armed','spin')}
+async function doRefresh(){
+  refreshing=true;const el=$('#bxptr');el.classList.add('armed','spin');el.style.transform='translateY(16px)';el.style.opacity='1';buzz(10);
+  const t0=Date.now();let upd=false;
+  try{if(swReg){await swReg.update();upd=!!(swReg.waiting||swReg.installing)}}catch{}
+  try{const js=await (await fetch('./box.js?v='+Date.now(),{cache:'no-store'})).text();const v=(js.match(/APP_VERSION='([\d.]+)'/)||[])[1];if(v&&v!==APP_VERSION)upd=true}catch{}
+  if(bkCfg())bkQueue(0);
+  await new Promise(r=>setTimeout(r,Math.max(0,750-(Date.now()-t0))));
+  refreshing=false;hidePtr();refresh();
+  if(upd){if(confirm('Eine neue Version der MySmartBox ist da. Jetzt neu laden?')){try{hooks.flush&&hooks.flush()}catch{}await saving;location.reload()}}
+  else toast(bkCfg()?'Alles aktuell – Sicherung wird abgeglichen.':'Alles aktuell.');
+}
+
 /* ---------- Neu-Auswahl (wie MyBelegBox) ---------- */
 function setFan(on){const f=$('#bxfan'),b=$('#fab');if(!f||!b)return;b.classList.toggle('open',on);b.setAttribute('aria-expanded',on);
   if(on){f.hidden=false;requestAnimationFrame(()=>requestAnimationFrame(()=>f.classList.add('show')));buzz(6)}
@@ -342,11 +398,13 @@ document.addEventListener('click',async e=>{
   const a=b.dataset.box;
   switch(a){
     case 'lock':showLock(false);break;
-    case 'menu':setFan(false);hooks.menu&&hooks.menu();break;
-    case 'search':setFan(false);hooks.search&&hooks.search();break;
+    case 'menu':setFan(false);sheetOpen()?closeSheet():openSheet();break;
+    case 'sheet-x':closeSheet();break;
+    case 'seg':hooks.go&&hooks.go(b.dataset.v);buzz(6);break;
+    case 'search':setFan(false);closeSheet();hooks.search&&hooks.search();break;
     case 'fan':setFan(!$('#fab').classList.contains('open'));break;
     case 'fanbg':setFan(false);break;
-    case 'new':setFan(false);hooks.create&&hooks.create(b.dataset.k);break;
+    case 'new':setFan(false);closeSheet();hooks.create&&hooks.create(b.dataset.k);break;
     case 'reload':location.reload();break;
     case 'bio-on':form('Fingerabdruck einrichten',[{k:'pw',l:'Zur Bestätigung dein Passwort',t:'password',req:true}],async v=>{
         try{await checkPw(v.pw)}catch{return ferr('Passwort falsch.')}setTimeout(()=>enableBio(v.pw),50)},
@@ -417,7 +475,8 @@ async function start(h){
     else if(KEY&&META.draft){META.draft=null;save({clean:true})}
     else if(!KEY&&!$('#lock').hidden)setTimeout(tryBio,300);
   });
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').then(r=>{swReg=r}).catch(()=>{});
+  document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#bxfan').hidden)setFan(false);else if(sheetOpen()&&!$('#bxdlg').open)closeSheet()});
 }
-return{start,persist,downloads,securityHtml,backupHtml,updateHtml,backupOk:()=>!!(bkCfg()&&bkStat.at&&!bkStat.err),flush:()=>saving,lock:()=>showLock(false)};
+return{start,persist,downloads,securityHtml,backupHtml,updateHtml,openSheet,closeSheet,sheetRefresh,seg,backupOk:()=>!!(bkCfg()&&bkStat.at&&!bkStat.err),flush:()=>saving,lock:()=>showLock(false)};
 })();

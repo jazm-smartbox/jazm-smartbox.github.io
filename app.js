@@ -144,8 +144,8 @@ function render(){
   queueMicrotask(() => afterRender(enter, floorEnter));
   const n = state.devices.length;
   document.getElementById("stats").innerHTML = "";
-  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === view));
-  document.getElementById("fab").hidden = !(view === "list" || view === "home");
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === (view === "stats" ? "home" : view)));
+  document.getElementById("fab").hidden = view === "plan";
   const v = document.getElementById("view");
   if (!ready) { v.innerHTML = `<div class="empty"><strong>Geräte werden geladen</strong>Gleich siehst du hier alle Geräte aus Smart Life, eWeLink und anderen Apps.</div>`; return; }
   if (view === "list") v.innerHTML = renderList();
@@ -158,10 +158,11 @@ function render(){
     fitPins(); requestAnimationFrame(fitPins);
     const s3 = document.getElementById("s3d"); if (s3) { if (s3.dataset.house) initHouse(); else init3d(); }
   }
-  else if (view === "home") { v.innerHTML = renderHome(); }
+  else if (view === "home") { v.innerHTML = BOX.seg("home") + renderHome(); }
   else if (view === "cmds") { v.innerHTML = renderCmds(); }
-  else if (view === "stats") { v.innerHTML = renderStats(); makeAccordions(v); }
-  else { v.innerHTML = `<div class="vtitle"><h2>Haus &amp; Daten</h2><p>Sicherheit, Sicherung, Räume, Apps und Automatik</p></div>` + renderRooms(); makeAccordions(v); }
+  else if (view === "stats") { v.innerHTML = BOX.seg("stats") + renderStats(); makeAccordions(v); }
+  else { v.innerHTML = `<div class="vtitle"><h2>Haus</h2><p>Räume, Apps, Automatik und Notfall</p></div>` + renderRooms(); makeAccordions(v); }
+  BOX.sheetRefresh();
 }
 let accOpen = {};
 try { accOpen = JSON.parse(localStorage.getItem(LS + "-acc") || "{}") || {}; } catch(_){}
@@ -370,16 +371,21 @@ function renderPlan(){
 
 /* Räume & Apps in Bereiche gliedern, innerhalb alphabetisch */
 const ROOM_CATS = [
-  ["Sicherheit & Daten", "Passwort, Fingerabdruck, Sicherung und Updates", ["Sicherheit", "Datensicherung", "App-Update"]],
   ["Haus", "Etagen, Räume, Stromkreise und WLAN", ["Etagen", "Gäste-WLAN", "Räume", "Sicherungskasten"]],
   ["Geräte", "Wie deine Geräte verbunden und gebündelt sind", ["Apps", "Gruppen", "IP-Adressen", "Verbindungen"]],
   ["Automatik", "Was von selbst oder per Sprache passiert", ["Routinen", "Sprachbefehle", "Zeitstrahl"]],
   ["Notfall & Hilfe", "Wenn etwas nicht geht und du nicht da bist", ["Konten", "Netzwerkplan", "Neustart-Reihenfolge", "Störungshilfe"]],
-  ["App", "Aussehen, Ausdrucke und Verlauf", ["Änderungsverlauf", "Darstellung", "Drucken & Exportieren"]]];
-function renderRooms(){
+  ];
+const SHEET_SECS = ["Sicherheit", "Datensicherung", "App-Update", "Darstellung", "Drucken & Exportieren", "Änderungsverlauf"];
+function roomSecs(){
   const raw = renderRoomsRaw(), parts = raw.split('<h2 class="sec"'), map = {};
-  let lead = parts.shift() || "";
+  const lead = parts.shift() || "";
   for (const p of parts) { const t = p.slice(p.indexOf(">") + 1, p.indexOf("</h2>")).replace(/&amp;/g, "&").trim(); map[t] = '<h2 class="sec"' + p; }
+  return {lead, map};
+}
+function renderRooms(){
+  const {lead, map} = roomSecs();
+  SHEET_SECS.forEach(n => delete map[n]);
   let h = lead;
   for (const [cat, sub, names] of ROOM_CATS) {
     const got = names.filter(n => map[n]); if (!got.length) continue;
@@ -388,6 +394,7 @@ function renderRooms(){
   const rest = Object.values(map); if (rest.length) h += `<div class="rcat accstop"><h3>Weiteres</h3></div>` + rest.join("");
   return h;
 }
+function renderSheet(){ const {map} = roomSecs(); return SHEET_SECS.filter(n => map[n]).map(n => map[n]).join(""); }
 function renderRoomsRaw(){
   const rooms = roomsInUse().sort((a, b) => a.localeCompare(b, "de", {numeric: true}));
   let h = BOX.securityHtml() + BOX.updateHtml() + `<h2 class="sec">Räume</h2>`;
@@ -736,7 +743,7 @@ document.addEventListener("click", e => {
   if (a === "home-where" || a === "home-out") { view = "plan"; stack3d = false; planMenu = true; render(); window.scrollTo(0, 0); const sel = document.getElementById(a === "home-where" ? "whereSel" : "outSel"); if (sel) { sel.focus(); try { sel.showPicker(); } catch(_){} } return; }
   if (a === "home-3d") { view = "plan"; view3d = false; stack3d = true; introHouse = false; camHome(); render(); window.scrollTo(0, 0); return; }
   if (a === "home-acc") { view = "rooms"; accOpen = {[t.dataset.sec]: true}; try { localStorage.setItem(LS + "-acc", JSON.stringify(accOpen)); } catch(_){} render(); setTimeout(() => document.querySelector(`.acchd[data-k="${t.dataset.sec}"]`)?.scrollIntoView({block: "start", behavior: "smooth"}), 60); return; }
-  if (a === "home-backup") { view = "rooms"; accOpen = {"Datensicherung": true}; try { localStorage.setItem(LS + "-acc", JSON.stringify(accOpen)); } catch(_){} render(); return; }
+  if (a === "home-backup") { accOpen = {...accOpen, "Datensicherung": true}; try { localStorage.setItem(LS + "-acc", JSON.stringify(accOpen)); } catch(_){} BOX.openSheet(); return; }
   if (a === "typo-open") { typoOpen = true; renderTypo(); return; }
   if (a === "typo-close" || (a === "typo-close-bg" && e.target === t)) { typoOpen = false; renderTypo(); return; }
   if (a === "typo-close-bg") return;
@@ -1410,7 +1417,7 @@ async function applyBackup(){
   const n = Object.keys(remap).length;
   toast(n ? `Sicherung eingelesen, ${n} Bild(er) wiederhergestellt` : "Sicherung eingelesen");
 }
-const fx = {pattern: true, anim: true, daylight: true, pulse: true, haptic: true, motion: true};
+const fx = {pattern: false, anim: true, daylight: true, pulse: true, haptic: true, motion: true};
 try { const v = JSON.parse(localStorage.getItem(LS + "-fx") || "{}"); if (typeof v.pattern === "boolean") fx.pattern = v.pattern; if (typeof v.anim === "boolean") fx.anim = v.anim; for (const k of ["daylight","pulse","haptic","motion"]) if (typeof v[k] === "boolean") fx[k] = v[k]; } catch(_){}
 function applyFx(){ document.body.classList.toggle("motion", motionOn()); document.body.classList.toggle("no-pattern", !fx.pattern); document.body.classList.toggle("no-anim", !fx.anim); }
 function setFx(k, v){ fx[k] = v; try { localStorage.setItem(LS + "-fx", JSON.stringify(fx)); } catch(_){} applyFx(); render(); }
@@ -2145,7 +2152,7 @@ function renderHome(){
 
 
 /* ================= Gesten ================= */
-const TABS = ["home", "list", "plan", "stats"];
+const TABS = ["home", "stats", "list", "plan", "rooms"];
 function goTab(dir){
   const i = TABS.indexOf(view); if (i < 0) return; const n = TABS[i + dir]; if (!n) { buzz(6); return; }
   view = n; placingId = ""; planMenu = false;
@@ -2187,7 +2194,7 @@ document.addEventListener("touchend", e => {
   const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, dt = Date.now() - sw.t, tg = sw.tg; sw = null;
   const pnl = tg.closest?.(".panel");
   if (pnl) { if (dy > 110 && Math.abs(dx) < 60 && pnl.scrollTop <= 0) { if (pnl.closest("#rmodal")) { if (gmId) { gmId = ""; renderMembers(); } else if (typoOpen) { typoOpen = false; renderTypo(); } else if (rdraft) { rdraft = null; renderRoutine(); } else document.getElementById("rmodal").innerHTML = ""; } else { draft = null; renderEditor(); } buzz(8); } else pnl.style.transform = ""; return; }
-  if (drag || tg.closest?.(".overlay")) return;
+  if (drag || tg.closest?.(".overlay, #bxsheet, .bxfan")) return;
   // Doppeltippen
   if (Math.hypot(dx, dy) < 12 && dt < 250) {
     const now = Date.now(), dbl = now - lastTap.t < 320 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 30;
@@ -3017,8 +3024,10 @@ BOX.start({
   restore(x){ if (!x) return; if (x.k === "dev") { draft = x.d; renderEditor(); } else if (x.k === "rt") { rdraft = x.d; renderRoutine(); } },
   replace(d){ state = normalize(d); save(); render(); },
   markBackup(){ state.lastBackup = new Date().toISOString(); save(); },
-  refresh(){ if (ready && view === "rooms") render(); },
-  menu(){ view = "rooms"; placingId = ""; render(); window.scrollTo(0, 0); },
+  refresh(){ if (ready) render(); },
+  go(v){ view = v; placingId = ""; render(); window.scrollTo(0, 0); },
+  sheetHtml(){ return ready ? renderSheet() : ""; },
+  decorate(root){ makeAccordions(root); },
   search(){ view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 60); },
   create(k){ if (k === "routine") openRoutine(null); else if (k === "room") { view = "rooms"; accOpen = {...accOpen, "Räume": true}; render(); setTimeout(() => { const i = document.getElementById("newRoom"); i?.scrollIntoView({block: "center"}); i?.focus(); }, 80); } else openEditor(null); }
 });
