@@ -1,6 +1,7 @@
 # MySmartBox: Zip-Paket automatisch übernehmen
-# Einfach eine Zip (z. B. mysmartbox-1_1_0.zip) über „Add file → Upload files“ ins Hauptverzeichnis laden.
-# Dieser Ablauf entpackt sie, prüft Version/Cache, übernimmt die Dateien, löscht die Zip und veröffentlicht.
+# Eine Zip (z. B. mysmartbox-1_1_0.zip) ins Hauptverzeichnis laden – per App-Update in der MySmartBox
+# oder über „Add file → Upload files“. Dieser Ablauf entpackt sie, prüft Version/Cache,
+# übernimmt die Dateien, löscht die Zip und veröffentlicht.
 name: MySmartBox Paket übernehmen
 run-name: Paket übernehmen
 
@@ -22,41 +23,49 @@ concurrency:
 
 jobs:
   entpacken:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Repo laden
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with: { fetch-depth: 1 }
 
       - name: Paket übernehmen
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           AELTER: ${{ inputs.aelter || 'nein' }}
         run: |
-          set -uo pipefail
+          set -u
+          trap 'echo "::error title=MySmartBox::Unerwarteter Fehler in Zeile $LINENO (Befehl: $BASH_COMMAND)"' ERR
           info()   { echo "::notice title=MySmartBox::$*"; }
           fehler() { echo "::error title=MySmartBox::$*"; exit 1; }
-          abbruch(){ git rm -q -- *.zip && git commit -q -m "Fehlerhaftes Paket entfernt" && git push -q origin HEAD:main; fehler "$* Zip wurde entfernt."; }
-          version_von() { grep -o "APP_VERSION='[0-9.]*'" "$1/box.js" 2>/dev/null | head -1 | grep -o '[0-9.]*[0-9]'; }
-          cache_von()   { grep -o "const CACHE = 'mysmartbox-[0-9.]*'" "$1/sw.js" 2>/dev/null | grep -o '[0-9.]*[0-9]'; }
+          zipweg() { git rm -q -- *.zip >/dev/null 2>&1 && git commit -q -m "Fehlerhaftes Paket entfernt" && git push -q origin HEAD:main || echo "Zip konnte nicht entfernt werden."; }
+          abbruch(){ zipweg; fehler "$* Zip wurde entfernt."; }
+          version_von() { grep -o "APP_VERSION='[0-9.]*'" "$1/box.js" 2>/dev/null | head -1 | grep -o '[0-9.]*[0-9]' || true; }
+          cache_von()   { grep -o "const CACHE = 'mysmartbox-[0-9.]*'" "$1/sw.js" 2>/dev/null | head -1 | grep -o '[0-9.]*[0-9]' || true; }
           git config user.name "JAZM"; git config user.email "jazm1309@users.noreply.github.com"
 
+          echo "Dateien im Repo:"; ls -la
           shopt -s nullglob
           ZIPS=( *.zip )
-          [ ${#ZIPS[@]} -eq 0 ] && { info "Keine Zip im Hauptverzeichnis – nichts zu tun."; exit 0; }
+          if [ ${#ZIPS[@]} -eq 0 ]; then info "Keine Zip im Hauptverzeichnis – nichts zu tun."; exit 0; fi
           ZIP=$(printf '%s\n' "${ZIPS[@]}" | sort -V | tail -1)
-          [ ${#ZIPS[@]} -gt 1 ] && info "Mehrere Zips gefunden, nehme die neueste: $ZIP"
+          if [ ${#ZIPS[@]} -gt 1 ]; then info "Mehrere Zips gefunden, nehme die neueste: $ZIP"; fi
+          echo "Paket: $ZIP"
 
           P="$RUNNER_TEMP/paket"; rm -rf "$P"; mkdir -p "$P"
-          unzip -q -o "$ZIP" -d "$P" || abbruch "$ZIP lässt sich nicht entpacken."
+          python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])' "$ZIP" "$P" || abbruch "$ZIP lässt sich nicht entpacken."
           Q="$P"
           # Zip mit einem einzigen Unterordner (z. B. mysmartbox/) akzeptieren
           if [ ! -f "$Q/index.html" ] && [ "$(ls -A "$Q" | wc -l)" = 1 ] && [ -d "$Q/$(ls -A "$Q")" ]; then Q="$Q/$(ls -A "$Q")"; fi
+          echo "Inhalt:"; ls -la "$Q"
 
           [ -f "$Q/index.html" ] || abbruch "In $ZIP fehlt die index.html. Nichts übernommen."
+          [ -f "$Q/box.js" ]     || abbruch "In $ZIP fehlt die box.js. Nichts übernommen."
           [ -f "$Q/sw.js" ]      || abbruch "In $ZIP fehlt die sw.js. Nichts übernommen."
           V=$(version_von "$Q"); C=$(cache_von "$Q")
+          echo "Version $V, Cache $C"
           [ -n "$V" ] || abbruch "Keine Versionsnummer (APP_VERSION) in der box.js gefunden."
           [ "$V" = "$C" ] || abbruch "Version ($V) und Cache ($C) passen nicht zusammen. Nichts übernommen."
 
@@ -75,6 +84,6 @@ jobs:
           if git diff --cached --quiet; then info "Keine Änderungen."; exit 0; fi
           N=$(git diff --cached --name-only | wc -l)
           git commit -q -m "MySmartBox $V (Paket $ZIP)"
-          git push -q origin HEAD:main || fehler "Hochladen fehlgeschlagen."
+          git push -q origin HEAD:main || fehler "Hochladen ins Repo fehlgeschlagen. Unter Settings → Actions → General → Workflow permissions „Read and write permissions“ wählen."
           gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" >/dev/null 2>&1 || true
-          info "MySmartBox ${ALT:-?} → $V übernommen ($N Änderungen). In 1–2 Minuten online."
+          info "MySmartBox ${ALT:-neu} → $V übernommen ($N Änderungen). In 1–2 Minuten online."
