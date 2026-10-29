@@ -512,6 +512,20 @@ function openEditor(id){
   renderEditor();
   setTimeout(()=>document.getElementById("f-name")?.focus(), 30);
 }
+/* ---------- Verbindung zur MyBelegBox: Kaufbeleg und Garantie liegen dort, Raum und Bedienung hier ----------
+   Geschickt werden nur Name, Raum und Art – über den Teil hinter „#“, der nicht an den Server geht.
+   Die MyBelegBox speichert nur die Verknüpfung und führt mit „In der MySmartBox öffnen“ hierher zurück. */
+const BB_BASE = "https://jazm-belegbox.github.io/";
+const b64url = t => btoa(String.fromCharCode(...new TextEncoder().encode(t))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function bbLink(d){
+  const here = location.origin + location.pathname.replace(/index\.html$/, "");
+  const p = {k: "d", ref: "mysmartbox:" + d.id, url: here + "?ref=" + encodeURIComponent(d.id), what: "Raum, Grundriss und Bedienung", name: d.name || "", raum: d.room || "", kategorie: "Technik"};
+  return BB_BASE + "#neu=" + b64url(JSON.stringify(p));
+}
+function bbLinkHtml(d){
+  if (!d || !state.devices.some(x => x.id === d.id)) return "";
+  return `<a class="bblink" href="${esc(bbLink(d))}" target="_blank" rel="noopener"><span class="ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span><span class="at"><b>In der MyBelegBox</b><small>Kaufbeleg, Garantie und Preis</small></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>`;
+}
 function renderEditor(){
   const m = document.getElementById("modal");
   if (!draft) { closeSheet(m); return; }
@@ -530,6 +544,7 @@ function renderEditor(){
       <div class="field"><label>Gruppen</label><div class="gpick">${state.groups.map(g=>`<button type="button" class="rchip" data-act="tgl-group" data-g="${g.id}" aria-pressed="${draft.groups.includes(g.id) || (g.autoTypes || []).includes(draft.type)}" ${(g.autoTypes || []).includes(draft.type) ? `disabled title="Automatisch: alle ${esc((TYPES[draft.type] || TYPES.other)[0])}-Geräte gehören dazu"` : ""}>${groupIcon}${esc(g.name)}</button>`).join("")}
         ${newGroupOpen?`<span class="gnew"><input id="f-newgroup" placeholder="z. B. Weihnachtsdeko" aria-label="Name der neuen Gruppe"><button type="button" class="btn small primary" data-act="add-group-ed">Anlegen</button></span>`:`<button type="button" class="rchip gadd" data-act="new-group-ed">+ Neue Gruppe</button>`}</div></div>
       <div class="field"><label for="f-note">Notiz</label><input id="f-note" value="${esc(draft.note)}" placeholder="z. B. hinter dem Schrank, Szene „Abends“"></div>
+      ${bbLinkHtml(draft)}
       ${(() => { const hp = draft.help || {}, sg = helpSuggest(draft), has = hp.manual || hp.pair || hp.reset;
         return `<details class="helpbox" ${has ? "open" : ""}><summary>Störungshilfe${has ? " ✓" : ""}</summary>
         <div class="field"><label for="f-hman">Von Hand bedienen</label><textarea id="f-hman" rows="2" placeholder="${esc(sg?.manual || "z. B. Taste am Gerät kurz drücken")}">${esc(hp.manual || "")}</textarea></div>
@@ -3039,6 +3054,7 @@ BOX.start({
   decorate(root){ makeAccordions(root); },
   search(){ view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 60); },
   shortcut(k){
+    if (k.startsWith("ref:")) { const id = k.slice(4), d = state.devices.find(x => x.id === id); if (d) { view = "list"; render(); openEditor(id); } else toast("Dieses Gerät gibt es in der MySmartBox nicht mehr."); return; }
     if (k === "geraet") openEditor(null);
     else if (k === "suche") { view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 80); }
     else if (k === "plan") { view = "plan"; stack3d = false; placingId = ""; render(); window.scrollTo(0, 0); }
