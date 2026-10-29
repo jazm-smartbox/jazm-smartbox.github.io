@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.2.1';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -252,8 +252,15 @@ function bkSetup(){
 }
 
 /* ---------- App-Update direkt aus der App ---------- */
-let UPD='';
-function setUpd(html){UPD=html;const el=document.getElementById('bxUpd');if(el)el.innerHTML=html}
+let UPD='',UPBUSY=false;
+/* Fortschritt sichtbar machen: im Blatt und als Leiste oben, auch wenn das Blatt zu ist */
+function setUpd(html,done){UPD=html;const el=document.getElementById('bxUpd');if(el){el.innerHTML=html;el.hidden=!html}
+  let bar=document.getElementById('bxprog');
+  if(!bar){bar=document.createElement('div');bar.id='bxprog';bar.className='bxprog';bar.setAttribute('role','status');document.body.appendChild(bar)}
+  bar.innerHTML=`<span>${html}</span>`+(done?'<button type="button" class="bxx" aria-label="Schließen">✕</button>':'');bar.hidden=!html;bar.classList.toggle('busy',!done);
+  const x=bar.querySelector('.bxx');if(x)x.onclick=()=>{bar.hidden=true};
+  clearTimeout(setUpd.t);if(done==='auto')setUpd.t=setTimeout(()=>{bar.hidden=true},8000);
+  const btn=document.querySelector('[data-box="gh-upload"]');if(btn){btn.disabled=UPBUSY;btn.textContent=UPBUSY?'Update läuft …':'Update-Zip hochladen'}}
 async function gh(path,opt={},tok){
   const t=tok||META.github?.token;if(!t)throw new Error('Kein GitHub-Token hinterlegt.');
   const r=await fetch('https://api.github.com'+path,{...opt,headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+t,'X-GitHub-Api-Version':'2022-11-28',...(opt.body?{'Content-Type':'application/json'}:{})}});
@@ -271,41 +278,43 @@ function ghSetup(){
 }
 function pickFile(accept){return new Promise(res=>{const i=$('#bxFile');i.value='';i.accept=accept;pickingUntil=Date.now()+10*60e3;i.onchange=()=>res(i.files[0]||null);i.click()})}
 async function ghUpload(){
+  if(UPBUSY){toast('Ein Update läuft schon – bitte kurz warten.');return}
   const file=await pickFile('.zip,application/zip');if(!file)return;
   if(!/\.zip$/i.test(file.name)){toast('Bitte eine .zip-Datei wählen.');return}
   const name=file.name.replace(/[^\w.\-]/g,'_'),repo=META.github.repo,tok=META.github.token;
   if(!confirm(`„${name}“ (${Math.round(file.size/1024)} KB) ins Repo hochladen und veröffentlichen?`))return;
-  setUpd('⏳ Lade Zip hoch …');
+  UPBUSY=true;setUpd('⏳ Lade Zip hoch …');buzz(8);
   try{
     const old=await gh(`/repos/${repo}/contents/${encodeURIComponent(name)}`,{allow404:true},tok);
     const res=await gh(`/repos/${repo}/contents/${encodeURIComponent(name)}`,{method:'PUT',body:JSON.stringify({message:'Paket '+name+' (aus der MySmartBox)',content:b64(await file.arrayBuffer()),branch:'main',...(old?.sha?{sha:old.sha}:{})})},tok);
     setUpd('⚙️ Hochgeladen – GitHub entpackt und prüft das Paket …');
-    watchRun(repo,tok,res.commit.sha);
-  }catch(e){setUpd('❌ '+esc(e.message))}
+    await watchRun(repo,tok,res.commit.sha);
+  }catch(e){UPBUSY=false;setUpd('❌ '+esc(e.message),true)}
+  UPBUSY=false;const b=document.querySelector('[data-box="gh-upload"]');if(b){b.disabled=false;b.textContent='Update-Zip hochladen'}
 }
 async function watchRun(repo,tok,sha){
   const t0=Date.now();let run=null;
   while(Date.now()-t0<5*60e3){
-    await new Promise(r=>setTimeout(r,5000));
+    await new Promise(r=>setTimeout(r,3000));
     try{const j=await gh(`/repos/${repo}/actions/runs?head_sha=${sha}&per_page=5`,{},tok);run=j.workflow_runs?.[0]||run}catch(e){}
     if(run&&run.status==='completed')break;
   }
-  if(!run){setUpd('⚠️ Kein Ablauf gefunden. Ist <b>.github/workflows/paket.yml</b> im Repo angelegt?');return}
+  if(!run){UPBUSY=false;setUpd('⚠️ Kein Ablauf gefunden. Ist <b>.github/workflows/paket.yml</b> im Repo angelegt?',true);return}
   const link=safeUrl(run.html_url)?` <a href="${esc(run.html_url)}" target="_blank" rel="noopener noreferrer">Details</a>`:'';
-  if(run.status!=='completed'){setUpd('⏳ Ablauf läuft noch länger als üblich.'+link);return}
+  if(run.status!=='completed'){UPBUSY=false;setUpd('⏳ Ablauf läuft noch länger als üblich.'+link,true);return}
   if(run.conclusion!=='success'){
     let msg='';try{const jobs=await gh(`/repos/${repo}/actions/runs/${run.id}/jobs`,{},tok);const id=jobs.jobs?.[0]?.id;
       if(id){const ann=await gh(`/repos/${repo}/check-runs/${id}/annotations`,{},tok);msg=(ann.find(a=>a.annotation_level==='failure')||ann[0])?.message||''}}catch(e){}
-    setUpd('❌ Paket abgelehnt'+(msg?': '+esc(msg):'.')+link);return;
+    UPBUSY=false;setUpd('❌ Paket abgelehnt'+(msg?': '+esc(msg):'.')+link,true);return;
   }
-  setUpd('✅ Paket übernommen – warte auf die Veröffentlichung …'+link);
+  setUpd('✅ Paket übernommen – GitHub veröffentlicht (meist unter 1 Minute) …'+link);
   const t1=Date.now();
-  while(Date.now()-t1<4*60e3){
-    await new Promise(r=>setTimeout(r,10000));
+  while(Date.now()-t1<5*60e3){
+    await new Promise(r=>setTimeout(r,5000));
     try{const js=await (await fetch('./box.js?v='+Date.now(),{cache:'no-store'})).text();const v=(js.match(/APP_VERSION='([\d.]+)'/)||[])[1];
-      if(v&&v!==APP_VERSION){setUpd(`🎉 Version ${esc(v)} ist online. <button class="btn small primary" data-box="reload">Jetzt neu laden</button>`);return}}catch(e){}
+      if(v&&v!==APP_VERSION){UPBUSY=false;setUpd(`🎉 Version ${esc(v)} ist online. <button class="btn small primary" data-box="reload">Jetzt neu laden</button>`,true);try{swReg&&swReg.update()}catch{}buzz([20,40,20]);return}}catch(e){}
   }
-  setUpd('✅ Paket übernommen. Die Seite ist noch nicht aktualisiert (gleiche Version oder GitHub braucht länger) – später neu laden.'+link);
+  UPBUSY=false;setUpd('✅ Paket übernommen. Die Seite ist noch nicht aktualisiert (gleiche Version oder GitHub braucht länger) – später neu laden.'+link,true);
 }
 
 /* ---------- Bereiche in „Haus & Daten“ ---------- */
@@ -325,7 +334,7 @@ function backupHtml(){
 }
 function updateHtml(){
   return `<h2 class="sec">App-Update</h2><div class="list"><div class="roomrow"><span class="n">MySmartBox · Version ${APP_VERSION}${META.github?` · verbunden mit ${esc(META.github.repo)}`:''}</span></div>
-    <div class="roomrow bkrow">${META.github?'<button class="btn small primary" data-box="gh-upload">Update-Zip hochladen</button><button class="btn small" data-box="gh-setup">Verbindung ändern</button><button class="btn small" data-box="gh-off">Trennen</button>':'<button class="btn small primary" data-box="gh-setup">GitHub verbinden</button>'}</div>
+    <div class="roomrow bkrow">${META.github?'<button class="btn small primary" data-box="gh-upload"'+(UPBUSY?' disabled':'')+'>'+(UPBUSY?'Update läuft …':'Update-Zip hochladen')+'</button><button class="btn small" data-box="gh-setup">Verbindung ändern</button><button class="btn small" data-box="gh-off">Trennen</button>':'<button class="btn small primary" data-box="gh-setup">GitHub verbinden</button>'}</div>
     <div class="roomrow" id="bxUpd"${UPD?'':' hidden'}>${UPD}</div></div>
     <p class="note">Neue Versionen kommen als Zip. Hier hochladen – GitHub prüft und veröffentlicht sie in 1–2 Minuten.</p>`;
 }
