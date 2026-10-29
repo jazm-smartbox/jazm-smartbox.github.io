@@ -3029,5 +3029,11 @@ BOX.start({
   sheetHtml(){ return ready ? renderSheet() : ""; },
   decorate(root){ makeAccordions(root); },
   search(){ view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 60); },
+  shortcut(k){
+    if (k === "geraet") openEditor(null);
+    else if (k === "suche") { view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 80); }
+    else if (k === "plan") { view = "plan"; stack3d = false; placingId = ""; render(); window.scrollTo(0, 0); }
+    else if (k === "strom") { view = "plan"; stack3d = false; planMenu = true; render(); window.scrollTo(0, 0); const sel = document.getElementById("outSel"); if (sel) sel.focus(); }
+  },
   create(k){ if (k === "routine") openRoutine(null); else if (k === "room") { view = "rooms"; accOpen = {...accOpen, "Räume": true}; render(); setTimeout(() => { const i = document.getElementById("newRoom"); i?.scrollIntoView({block: "center"}); i?.focus(); }, 80); } else openEditor(null); }
 });

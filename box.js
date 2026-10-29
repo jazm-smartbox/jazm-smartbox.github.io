@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.1.2';
+const APP_VERSION='1.2.0';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -30,6 +30,7 @@ const idb=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=index
   return{get:k=>tx('readonly',st=>st.get(k)),put:(k,v)=>tx('readwrite',st=>st.put(v,k)),del:k=>tx('readwrite',st=>st.delete(k))}})();
 const vaultOk=j=>{try{const v=JSON.parse(j);return !!(v&&typeof v.salt==='string'&&typeof v.iv==='string'&&typeof v.ct==='string')}catch{return false}};
 const vaultTime=j=>{try{return Number(JSON.parse(j).saved)||0}catch{return 0}};
+let GO=(()=>{try{const u=new URL(location.href),g=u.searchParams.get('go');if(g){u.searchParams.delete('go');history.replaceState(null,'',u.pathname+u.search+u.hash)}return /^[a-z]{2,20}$/.test(g||'')?g:null}catch{return null}})();
 let hooks={},KEY=null,SALT=null,VID=null,vaultJson=null,META={},STATE=null,PENDING=null;
 let saving=Promise.resolve();
 async function writeVaultStr(json){
@@ -133,6 +134,7 @@ async function unlockWith(pw){
   try{navigator.storage?.persist?.()}catch{}
   resetIdle();
   hooks.open&&hooks.open(JSON.parse(JSON.stringify(STATE)));
+  if(GO){const g=GO;GO=null;setTimeout(()=>{try{hooks.shortcut&&hooks.shortcut(g)}catch{}},250)}
   const dr=META.draft;if(dr){META.draft=null;save({clean:true});setTimeout(()=>{try{hooks.restore&&hooks.restore(dr);toast('Deine letzte Eingabe wurde wiederhergestellt.')}catch{}},250)}
   setTimeout(()=>bkQueue(0),3000);
 }
