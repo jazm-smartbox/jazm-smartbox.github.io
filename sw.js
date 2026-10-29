@@ -1,6 +1,6 @@
 // MySmartBox Service Worker – Netzwerk zuerst, offline aus dem Cache
-const CACHE = 'mysmartbox-1.4.3';
-const ASSETS = ['./', './index.html', './box.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './jazm-logo.png'];
+const CACHE = 'mysmartbox-1.5.0';
+const ASSETS = ['./', './index.html', './box.js', './app.js', './manifest.json', './icon-192.png', './icon-512.png', './jazm-logo.png', './ds.js', './boxen/smartbox.png', './boxen/gesundbox.png', './boxen/belegbox.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, {cache: 'reload'})))));

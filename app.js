@@ -142,6 +142,7 @@ function render(){
   const enter = ready && view !== lastView, floorEnter = ready && view === "plan" && (enter || curFloor !== lastFloorR);
   if (ready) { lastView = view; lastFloorR = curFloor; }
   queueMicrotask(() => afterRender(enter, floorEnter));
+  queueMicrotask(() => window.dsDot());
   const n = state.devices.length;
   document.getElementById("stats").innerHTML = "";
   document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === (view === "stats" ? "home" : view)));
@@ -394,7 +395,7 @@ function renderRooms(){
   const rest = Object.values(map); if (rest.length) h += `<div class="rcat accstop"><h3>Weiteres</h3></div>` + rest.join("");
   return h;
 }
-function renderSheet(){ const {map} = roomSecs(); return SHEET_SECS.filter(n => map[n]).map(n => map[n]).join(""); }
+function renderSheet(){ const {map} = roomSecs(); return SHEET_SECS.filter(n => map[n]).map(n => map[n]).join("") + `<div class="accstop ds-boxwrap"><div class="ds-lbl">Meine Boxen</div>${DS.boxesHtml()}</div>`; }
 function renderRoomsRaw(){
   const rooms = roomsInUse().sort((a, b) => a.localeCompare(b, "de", {numeric: true}));
   let h = BOX.securityHtml() + BOX.updateHtml() + `<h2 class="sec">Räume</h2>`;
@@ -414,7 +415,7 @@ function renderRoomsRaw(){
   }
   h += `</div><form class="addroom" id="addRoom"><input id="newRoom" placeholder="Neuer Raum, z. B. Flur" aria-label="Neuer Raum"><button class="btn primary">Hinzufügen</button></form>
   <p class="note">Ein Raum umbenennen ändert ihn bei allen Geräten. Beim Löschen behalten die Geräte ihre Daten und landen unter „Ohne Raum“.</p>`;
-  h += `<h2 class="sec">Darstellung</h2><div class="list">
+  h += `<h2 class="sec">Darstellung</h2><div class="ds-lbl">Hell oder dunkel</div>${DS.themeHtml()}<div class="ds-lbl sep">Effekte</div><div class="list">
     <label class="roomrow optrow"><span>Platinen-Muster im Hintergrund</span><input type="checkbox" id="optPattern" ${fx.pattern?"checked":""}></label>
     <label class="roomrow optrow"><span>Wandernde Lichtpunkte</span><input type="checkbox" id="optAnim" ${fx.anim?"checked":""} ${fx.pattern?"":"disabled"}></label>
     <label class="roomrow optrow"><span>Datenpuls beim Speichern</span><input type="checkbox" id="optPulse" ${fx.pulse?"checked":""} ${fx.pattern?"":"disabled"}></label>
@@ -623,15 +624,22 @@ function commitDraft(){
   if (d.room && !state.rooms.includes(d.room)) state.rooms.push(d.room);
   const i = state.devices.findIndex(x => x.id === d.id);
   if (i >= 0) state.devices[i] = d; else state.devices.push(d);
-  draft = null; renderEditor(); save(); render(); showCheck();
-  toast(_new ? "Gerät hinzugefügt" : "Gespeichert");
+  save();
+  /* Haken im Speichern-Knopf, dann schließt das Blatt (wie MyGesundBox / MyBelegBox) */
+  const firstDev = _new && state.devices.filter(x => !x.example).length === 1;
+  const sb = [...document.querySelectorAll(".panel .btn.primary")].find(b => /Speichern/.test(b.textContent));
+  const fin = () => { draft = null; renderEditor(); render(); if (firstDev) DS.yay("Dein erstes Gerät!", true); toast(_new ? "Gerät hinzugefügt" : "Gespeichert"); };
+  if (motionOn() && sb) { DS.savedTick(sb); setTimeout(fin, 600); } else fin();
 }
 
 /* ---------- Events ---------- */
 let drag = null, suppressClick = false, snapWaiting = false;
+/* Nachts leuchten Lampen im Grundriss (Tageszeit im Grundriss muss an sein) */
+const isNight2d = () => { if (!fx.daylight) return false; const {rise, set} = sunTimes(), hr = dlHour ?? nowHour(); return hr < rise - .3 || hr > set + .3; };
+const lampGlow = d => isLamp(d) && !d.inactive && !offState(d) && isNight2d() ? "glow" : "";
 function pinHtml(d, style){
   const a = appById(d.app), im = appIcon(a, "pimg");
-  return `<button class="pin ${activePin===d.id?"active":""} ${flashPin===d.id?"flash":""} ${offState(d)} ${d.inactive ? "inact" : ""}" data-c="${a.color}" style="${style}" data-act="edit" data-id="${d.id}" aria-label="${esc(d.name)}"><span class="head ${im?"hasimg":""}">${im||icon(d.type)}</span><span class="lbl">${esc(d.name)}</span></button>`;
+  return `<button class="pin ${activePin===d.id?"active":""} ${flashPin===d.id?"flash":""} ${offState(d)} ${lampGlow(d)} ${d.inactive ? "inact" : ""}" data-c="${a.color}" style="${style}" data-act="edit" data-id="${d.id}" aria-label="${esc(d.name)}"><span class="head ${im?"hasimg":""}">${im||icon(d.type)}</span><span class="lbl">${esc(d.name)}</span></button>`;
 }
 /* Geräte, die sich fast überdecken, werden zu einer Reihe zusammengefasst */
 const G = new Map();
@@ -1592,7 +1600,7 @@ function daylightHtml(noGlow){
   let glow = "";
   if (!day && !noGlow) {
     const ar = arCache[planUrl()] || .77, k = .25 + .75 * night;
-    const lights = state.devices.filter(d => onPlan(d) && floorOf(d) === curFloor && (isLamp(d) || d.type === "alexa"));
+    const lights = state.devices.filter(d => onPlan(d) && floorOf(d) === curFloor && !d.inactive && !offState(d) && (isLamp(d) || d.type === "alexa"));
     glow = lights.map((d, i) => { const k = (.25 + .75 * night) * Math.max(0, Math.min(1, (night - Math.min(.6, i * .08)) / .3 + (night >= 1 ? 1 : 0))); return isLamp(d)
       ? `radial-gradient(ellipse ${4}% ${4 * ar}% at ${d.x}% ${d.y}%, rgba(255,246,214,${k}) 0%, rgba(255,226,160,${.9 * k}) 45%, rgba(255,210,130,0) 100%), radial-gradient(ellipse ${19}% ${19 * ar}% at ${d.x}% ${d.y}%, rgba(255,205,120,${k}) 0%, rgba(255,186,95,${.8 * k}) 22%, rgba(255,170,80,${.38 * k}) 55%, rgba(255,160,70,0) 100%)`
       : `radial-gradient(ellipse ${4}% ${4 * ar}% at ${d.x}% ${d.y}%, rgba(90,200,255,${.75 * k}) 0%, rgba(90,200,255,0) 100%)`; });
@@ -1611,6 +1619,8 @@ function updateDaylight(){
   const c = document.getElementById("canvas"); if (!c) return;
   c.querySelector(".dl")?.remove(); c.querySelector(".sunb")?.remove();
   c.querySelector("img")?.insertAdjacentHTML("afterend", daylightHtml());
+  /* Lampen im Zeitraffer passend ein- und ausschalten */
+  c.querySelectorAll(".pin[data-id]").forEach(p => { const d = state.devices.find(x => x.id === p.dataset.id); if (d) p.classList.toggle("glow", !!lampGlow(d)); });
 }
 let dlRun = 0;
 function sunInfo(){
@@ -1657,6 +1667,13 @@ function startOutage(no){
   try { localStorage.setItem(LS+"-tab", view); localStorage.setItem(LS+"-floor", curFloor); } catch(_){}
   render(); buzz([40, 50, 40]);
   window.scrollTo({top: 0, behavior: "smooth"});
+  /* Licht-aus-Effekt: betroffene Geräte flackern nacheinander und gehen aus, der Plan wird kurz dunkel */
+  if (motionOn()) requestAnimationFrame(() => {
+    const c = document.getElementById("canvas"); if (!c) return;
+    c.classList.add("poweroff"); setTimeout(() => c.classList.remove("poweroff"), 1300);
+    [...c.querySelectorAll(".pin.off, .pin.unreach")].forEach((p, i) => p.animate([{opacity: 1, filter: "brightness(1.6)"}, {opacity: .25}, {opacity: 1, filter: "brightness(1.4)"}, {opacity: .2}, {opacity: 1}], {duration: 520, delay: 120 + i * 90, easing: "steps(5)"}));
+    [...c.querySelectorAll(".ozones polygon")].forEach((p, i) => p.animate([{opacity: 0}, {opacity: .9}, {opacity: .1}, {opacity: 1}], {duration: 520, delay: i * 160, easing: "steps(4)"}));
+  });
 }
 function endOutage(){
   const polys = [...document.querySelectorAll(".ozones polygon")];
@@ -2125,24 +2142,18 @@ function homeIndex(){
     .map(([k, l]) => ({k, l, ok: D.filter(d => !MISS[k].test(d)).length}));
   return {pct: Math.round(parts.reduce((a, p) => a + p.ok / n, 0) / parts.length * 100), parts, n: D.length};
 }
-/* Erinnerung an die Datensicherung – gleich in MySmartBox, MyGesundBox und MyBelegBox */
-const DS_ICO_DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>';
-const DS_ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
-function dsRemindHtml(o,attr){
-  const e=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const card=(cls,ico,t,s,go)=>`<button type="button" class="ds-remind${cls}" ${attr}><span class="ds-remind-i">${ico}</span><span class="ds-remind-t"><b>${e(t)}</b><small>${e(s)}</small></span><span class="ds-remind-go">${go}</span></button>`;
-  if(o.ghErr)return card(' crit',DS_ICO_WARN,'GitHub-Sicherung: Problem',o.ghErr,'Ansehen');
-  if(!o.own||o.ghOk)return '';
-  const d=o.days,dirty=o.dirty||0;
-  if(d!=null&&d<=14&&dirty<5)return '';
-  return card('',DS_ICO_DOWN,d==null?'Noch keine Datensicherung':dirty>=5?dirty+' Änderungen seit der letzten Datensicherung':'Letzte Datensicherung vor '+d+' Tagen',
-    'Ohne Sicherung sind bei Handyverlust oder gelöschten Browserdaten alle Daten weg.','Sichern');
+/* Erinnerung an die Datensicherung: gemeinsamer Baustein in ds.js */
+const dsRemindHtml=(o,attr)=>DS.remindHtml(o,attr);
+function bkO(){
+  const b = BOX.bkInfo(), ts = [b.last ? new Date(b.last + "T00:00").getTime() : 0, state.lastBackup ? new Date(state.lastBackup).getTime() : 0].filter(x => x && !isNaN(x)), last = ts.length ? Math.max(...ts) : 0;
+  return {ghErr: b.ghErr, ghOk: b.ghOk, own: state.devices.length > 0, days: last ? Math.floor((Date.now() - last) / 864e5) : null, dirty: b.dirty};
 }
 function homeRemind(){
   if (readOnly) return "";
-  const b = BOX.bkInfo(), ts = [b.last ? new Date(b.last + "T00:00").getTime() : 0, state.lastBackup ? new Date(state.lastBackup).getTime() : 0].filter(x => x && !isNaN(x)), last = ts.length ? Math.max(...ts) : 0;
-  return dsRemindHtml({ghErr: b.ghErr, ghOk: b.ghOk, own: state.devices.length > 0, days: last ? Math.floor((Date.now() - last) / 864e5) : null, dirty: b.dirty}, 'data-act="home-backup"');
+  return dsRemindHtml(bkO(), 'data-act="home-backup"');
 }
+/* Punkt am Schloss: Stand der Datensicherung */
+window.dsDot = () => { try { if (ready) DS.lockDot(document.querySelector('[data-box="lock"]'), readOnly ? {} : bkO()); } catch (_) {} };
 function renderHome(){
   const D = state.devices.filter(d => !d.inactive), nInact = state.devices.length - D.length, hr = new Date().getHours(), {rise, set} = sunTimes(), nowH = nowHour(), day = nowH >= rise && nowH <= set;
   const greet = hr < 5 ? "Gute Nacht" : hr < 11 ? "Guten Morgen" : hr < 18 ? "Guten Tag" : hr < 22 ? "Guten Abend" : "Gute Nacht";

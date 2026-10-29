@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.4.3';
+const APP_VERSION='1.5.0';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -79,7 +79,7 @@ async function enableBio(pw){
     else{toast('Jetzt zur Bestätigung den Passkey „MySmartBox“ wählen …');k=await prfKey(credId,prfSalt)}
     const iv=rnd(12),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,te.encode(pw));
     lsSet(BKEY,JSON.stringify({cred:b64(credId),salt:b64(prfSalt),iv:b64(iv),ct:b64(ct)}));
-    toast('Fingerabdruck eingerichtet ✓');refresh();
+    DS.yay('Fingerabdruck an');toast('Fingerabdruck eingerichtet ✓');refresh();
   }catch(err){
     if(err.message==='noprf')alert('Dein Passkey-Anbieter unterstützt diese Funktion nicht. Bitte beim Einrichten den Google Passwortmanager als Speicherort wählen und erneut versuchen.');
     else if(err.name==='NotAllowedError')alert('Einrichtung abgebrochen oder Passkey nicht gefunden. Bitte erneut versuchen und beim Speichern den Google Passwortmanager wählen.');
@@ -130,7 +130,8 @@ async function unlockWith(pw){
   SALT=unb64(p.salt);KEY=k;VID=p.vid||b64(rnd(12));
   STATE=o&&o.s?o.s:{};META=o&&o.m&&typeof o.m==='object'?o.m:{};
   if(!p.vid)save({clean:true});
-  $('#lock').hidden=true;document.body.classList.remove('bxlocked');
+  /* Licht geht an, dann öffnet sich die App (wie die Tresortür der MyBelegBox) */
+  DS.unlockAnim($('#lock'),$('#lock .bxlockico'),'light',()=>{if(!KEY)return;$('#lock').hidden=true;document.body.classList.remove('bxlocked')});
   try{navigator.storage?.persist?.()}catch{}
   resetIdle();
   hooks.open&&hooks.open(JSON.parse(JSON.stringify(STATE)));
@@ -155,10 +156,10 @@ async function deliver(name,blob,share){
 }
 const downloads={save:async({filename,data})=>{const ok=await deliver(filename,data instanceof Blob?data:new Blob([data]),false);if(!ok){const e=new Error('declined');e.code='declined';throw e}}};
 async function exportBackup(){
-  await saving;META.lastFile=today();META.dirty=0;await save({clean:true});await saving;
+  const first=!META.lastFile;await saving;META.lastFile=today();META.dirty=0;await save({clean:true});await saving;
   if(!vaultJson){toast('Es gibt noch nichts zu sichern.');return}
   const payload=JSON.stringify({app:NS,format:1,exported:new Date().toISOString(),version:APP_VERSION,vault:JSON.parse(vaultJson)});
-  if(await deliver(`mysmartbox-sicherung-${today()}.mysmartbox`,new Blob([payload],{type:'application/json'}),true)){toast('Sicherung erstellt. Leg die Datei an einem zweiten Ort ab, z. B. in deiner Cloud.');hooks.markBackup&&hooks.markBackup();refresh()}
+  if(await deliver(`mysmartbox-sicherung-${today()}.mysmartbox`,new Blob([payload],{type:'application/json'}),true)){DS.yay(first?'Erste Sicherung':'Gesichert',first);toast('Sicherung erstellt. Leg die Datei an einem zweiten Ort ab, z. B. in deiner Cloud.');hooks.markBackup&&hooks.markBackup();refresh()}
 }
 /* Bisherige Sicherung (app „JAZM Meine Geräte“): Bilder direkt in die Daten übernehmen */
 function inlineOld(j){
@@ -185,10 +186,13 @@ async function restoreVault(json){
 /* ---------- Automatische Sicherung in ein privates GitHub-Repo (nur der verschlüsselte Tresor) ---------- */
 let bkTimer=0,bkBusy=false,bkAgain=null,bkPending=null;
 let bkStat=(()=>{try{return JSON.parse(lsGet(GHS))||{}}catch{return{}}})();
-function setBk(o){bkStat={...bkStat,...o};lsSet(GHS,JSON.stringify(bkStat));const el=document.getElementById('bxBkStatus');if(el)el.innerHTML=bkText()}
+function setBk(o){bkStat={...bkStat,...o};lsSet(GHS,JSON.stringify(bkStat));const el=document.getElementById('bxBkStatus');if(el)el.innerHTML=bkText();try{window.dsDot&&window.dsDot()}catch{}}
 const bkCfg=()=>META.backupGh?{...META.backupGh}:null;
+/* Optionaler Ordner im Repo: so können alle drei Boxen in ein gemeinsames Repo sichern */
+const bkDir=v=>String(v||'').trim().replace(/^\/+|\/+$/g,'').replace(/[^\w.\/-]/g,'');
 async function bkFetch(g,method,path,body,raw){
-  const r=await fetch(`https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}${path}`,{method,cache:'no-store',
+  path=g.dir&&path.startsWith('/contents/')?'/contents/'+encodeURI(g.dir)+'/'+path.slice(10):g.dir&&path==='/contents'?'/contents/'+encodeURI(g.dir):path;
+    const r=await fetch(`https://api.github.com/repos/${encodeURIComponent(g.owner)}/${encodeURIComponent(g.repo)}${path}`,{method,cache:'no-store',
     headers:{'Authorization':'Bearer '+g.token,'Accept':raw?'application/vnd.github.raw+json':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(body?{'Content-Type':'application/json'}:{})},
     body:body?JSON.stringify(body):undefined});
   if(r.status===404&&method==='GET')return null;
@@ -239,16 +243,16 @@ async function bkSync(force){
 }
 async function bkRestore(g){const{json}=await bkRemote(g);if(!json||!vaultOk(json))throw new Error('Im Repo wurde keine MySmartBox-Sicherung gefunden.');return json}
 function bkSetup(){
-  form('GitHub-Sicherung einrichten',[{k:'owner',l:'Konto / Organisation',req:true,v:DEF_BK.owner},{k:'repo',l:'Privates Repo',req:true,v:DEF_BK.repo},{k:'token',l:'Zugangsschlüssel (github_pat_…)',t:'password',req:true}],async v=>{
-    const g={owner:v.owner.trim(),repo:v.repo.trim(),token:v.token.trim()};
+  form('GitHub-Sicherung einrichten',[{k:'owner',l:'Konto / Organisation',req:true,v:DEF_BK.owner},{k:'repo',l:'Privates Repo',req:true,v:DEF_BK.repo},{k:'dir',l:'Ordner im Repo (optional, z. B. smartbox)',v:bkCfg()?.dir||''},{k:'token',l:'Zugangsschlüssel (github_pat_…)',t:'password',req:true}],async v=>{
+    const g={owner:v.owner.trim(),repo:v.repo.trim(),token:v.token.trim()};const dd=bkDir(v.dir);if(dd)g.dir=dd;
     try{const info=await bkFetch(g,'GET','');
       if(!info)return ferr(bkErrText({status:404}));
       if(!info.private)return ferr('Dieses Repo ist öffentlich. Aus Sicherheitsgründen sichert die MySmartBox nur in private Repos.');
       if(info.permissions&&info.permissions.push===false)return ferr('Der Schlüssel darf in dieses Repo nicht schreiben. Setze „Contents“ auf „Read and write“.');
     }catch(e){return ferr(bkErrText(e))}
     META.backupGh=g;setBk({err:'',at:0,conflict:false});await save({clean:true});refresh();
-    setTimeout(async()=>{await bkSync();if(!bkStat.err)toast('Automatische Sicherung ist aktiv ✓');refresh()},50);
-  },{ok:'Verbinden & sichern',html:'<p class="ds-dlg-intro">Sichert den verschlüsselten Tresor nach jeder Änderung in ein <b>privates</b> GitHub-Repo. GitHub sieht nur verschlüsselte Daten. Zugangsschlüssel: nur für dieses Repo, mit <b>Contents: Read and write</b>.</p>'});
+    setTimeout(async()=>{await bkSync();if(!bkStat.err){DS.yay('GitHub verbunden',true);toast('Automatische Sicherung ist aktiv ✓')}refresh()},50);
+  },{ok:'Verbinden & sichern',html:'<p class="ds-dlg-intro">Sichert den verschlüsselten Tresor nach jeder Änderung in ein <b>privates</b> GitHub-Repo. GitHub sieht nur verschlüsselte Daten. Zugangsschlüssel: nur für dieses Repo, mit <b>Contents: Read and write</b>. Tipp: Für alle drei Boxen genügt ein Repo – trag je Box einen eigenen Ordner ein (z. B. smartbox, gesundbox, belegbox) und nutze denselben Zugangsschlüssel.</p>'});
 }
 
 /* ---------- App-Update direkt aus der App ---------- */
@@ -312,7 +316,7 @@ async function watchRun(repo,tok,sha){
   while(Date.now()-t1<5*60e3){
     await new Promise(r=>setTimeout(r,5000));
     try{const js=await (await fetch('./box.js?v='+Date.now(),{cache:'no-store'})).text();const v=(js.match(/APP_VERSION='([\d.]+)'/)||[])[1];
-      if(v&&v!==APP_VERSION){UPBUSY=false;setUpd(`🎉 Version ${esc(v)} ist online.<div class="ds-acts"><button type="button" class="ds-btn pri" data-box="reload">Jetzt neu laden</button></div>`,true);try{swReg&&swReg.update()}catch{}buzz([20,40,20]);return}}catch(e){}
+      if(v&&v!==APP_VERSION){UPBUSY=false;setUpd(`🎉 Version ${esc(v)} ist online.<div class="ds-acts"><button type="button" class="ds-btn pri" data-box="reload">Jetzt neu laden</button></div>`,true);DS.yay('Update online',true);try{swReg&&swReg.update()}catch{}buzz([20,40,20]);return}}catch(e){}
   }
   UPBUSY=false;setUpd('✅ Paket übernommen. Die Seite ist noch nicht aktualisiert (gleiche Version oder GitHub braucht länger) – später neu laden.'+link,true);
 }
@@ -335,7 +339,7 @@ function securityHtml(){
 function backupHtml(){
   const g=bkCfg(),lf=META.lastFile?new Date(META.lastFile+'T00:00').toLocaleDateString('de-DE'):'';
   return `<div class="ds-lbl">Automatisch in GitHub</div>
-    ${g?`<p class="ds-hint">Nach jeder Änderung landet der verschlüsselte Tresor in <b>${esc(g.owner)}/${esc(g.repo)}</b>. GitHub sieht nur verschlüsselte Daten.</p>
+    ${g?`<p class="ds-hint">Nach jeder Änderung landet der verschlüsselte Tresor in <b>${esc(g.owner)}/${esc(g.repo)}${g.dir?'/'+esc(g.dir):''}</b>. GitHub sieht nur verschlüsselte Daten.</p>
     <div class="ds-stat" id="bxBkStatus">${bkText()}</div>
     ${bkStat.conflict?`<div class="ds-box crit">Im Repo liegt ein anderer Tresor (z. B. von einem früheren Gerät). Er bleibt in der Versionsgeschichte von GitHub erhalten, wenn du ihn ersetzt.<div class="ds-acts"><button type="button" class="ds-btn pri" data-box="bk-pull">GitHub-Stand laden</button><button type="button" class="ds-btn dng" data-box="bk-force">Durch diesen ersetzen</button></div></div>`:''}
     <div class="ds-acts"><button type="button" class="ds-btn pri" data-box="bk-now">Jetzt sichern</button><button type="button" class="ds-btn" data-box="bk-off">Trennen</button></div>`
@@ -361,7 +365,7 @@ const SHEET_META={
   'Sicherheit':[SVG('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),()=>'Passwort · Fingerabdruck '+(bioSupported()&&lsGet(BKEY)?'an':'aus')],
   'Datensicherung':[SVG('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),()=>(bkCfg()?(bkStat.err?'GitHub ⚠️ Problem':'GitHub an'):'GitHub aus')+' · '+(META.lastFile?'Datei '+new Date(META.lastFile+'T00:00').toLocaleDateString('de-DE'):'keine Datei')],
   'App-Update':[SVG('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'),()=>'Version '+APP_VERSION+' · '+(META.github?'GitHub verbunden':'nicht verbunden')],
-  'Darstellung':[SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),()=>'Muster, Animationen, Vibration'],
+  'Darstellung':[SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),()=>({auto:'Automatisch',light:'Hell',dark:'Dunkel'}[DS.getTheme()])+' · Muster, Animationen'],
   'Drucken & Exportieren':[SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>'),()=>'PDF, Tabelle, QR-Aufkleber'],
   'Änderungsverlauf':[SVG('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'),()=>'Was wann geändert wurde']};
 const sheetOpen=()=>!$('#bxsheet').hidden;
@@ -461,7 +465,7 @@ document.addEventListener('click',async e=>{
         if(v.n1.length<10)return ferr('Das neue Passwort braucht mindestens 10 Zeichen.');if(v.n1!==v.n2)return ferr('Die neuen Passwörter stimmen nicht überein.');
         try{await checkPw(v.old)}catch{return ferr('Das aktuelle Passwort ist falsch.')}
         SALT=rnd(16);KEY=await derive(v.n1,SALT);await save({clean:true});await saving;
-        if(lsGet(BKEY)){lsDel(BKEY);toast('Passwort geändert. Bitte den Fingerabdruck neu einrichten.')}else toast('Passwort geändert ✓');refresh()},{ok:'Passwort ändern'});break;
+        if(lsGet(BKEY)){lsDel(BKEY);toast('Passwort geändert. Bitte den Fingerabdruck neu einrichten.')}else toast('Passwort geändert ✓');DS.yay('Neu verschlüsselt');refresh()},{ok:'Passwort ändern'});break;
     case 'wipe':if(confirm('Wirklich ALLE Daten auf diesem Gerät löschen? Das lässt sich nicht rückgängig machen.')&&confirm('Ganz sicher? Ohne Sicherung sind die Daten weg.')){
         try{await idb.del('vault')}catch{}lsDel(VKEY);lsDel(BKEY);lsDel(GHS);location.reload()}break;
     case 'bk-setup':bkSetup();break;
@@ -498,7 +502,7 @@ async function start(h){
     try{
       if(!stored){SALT=rnd(16);KEY=await derive(pw,SALT);VID=b64(rnd(12));STATE=PENDING?PENDING.data:{};META={};PENDING=null;await save({clean:true});await saving}
       await unlockWith(pw);
-      if(!stored&&bioSupported())setTimeout(()=>{if(confirm('Möchtest du künftig per Fingerabdruck entsperren?'))enableBio(pw)},500);
+      if(!stored&&bioSupported())setTimeout(()=>{if(confirm('Möchtest du künftig per Fingerabdruck entsperren?'))enableBio(pw)},1200);
     }catch(err){KEY=null;$('#lockErr').textContent=stored?'Das Passwort ist falsch.':'Fehler: '+err.message}
     finally{btn.disabled=false;btn.textContent=vaultJson?'Entsperren':(PENDING?'Übernehmen & verschlüsseln':'MySmartBox anlegen')}
   };
@@ -508,7 +512,7 @@ async function start(h){
     catch(x){$('#lockErr').textContent=x.message}});
   $('#lghOpen').onclick=()=>{const b=$('#lgh');b.hidden=!b.hidden;if(!b.hidden)$('#lgh_t').focus()};
   $('#lgh_go').onclick=async()=>{const m=$('#lgh_msg'),bt=$('#lgh_go');
-    const g={owner:$('#lgh_o').value.trim(),repo:$('#lgh_r').value.trim(),token:$('#lgh_t').value.trim()};
+    const g={owner:$('#lgh_o').value.trim(),repo:$('#lgh_r').value.trim(),token:$('#lgh_t').value.trim()};const dd=bkDir($('#lgh_d')&&$('#lgh_d').value);if(dd)g.dir=dd;
     if(!g.owner||!g.repo||!g.token){m.textContent='Bitte alle drei Felder ausfüllen.';return}
     bt.disabled=true;m.textContent='Lade Tresor …';
     try{await restoreVault(await bkRestore(g))}catch(x){m.textContent=x.status?bkErrText(x):x.message}finally{bt.disabled=false}};

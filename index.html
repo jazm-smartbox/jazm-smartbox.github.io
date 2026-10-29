@@ -1646,6 +1646,59 @@ img.aimg,img.abadge,img.aprev{background:#fff}
 .ds-qrow .ds-qt b{font-size:16px;font-weight:700;overflow-wrap:anywhere}
 .ds-qrow .ds-qt small{font-size:13px;color:var(--ds-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ds-srch .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Darstellung: Umschalter Automatisch / Hell / Dunkel */
+.ds-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:12px;background:var(--ds-sunk)}
+.ds-seg button{all:unset;box-sizing:border-box;text-align:center;padding:9px 6px;border-radius:9px;font-family:inherit;font-size:14px;font-weight:600;color:var(--ds-muted);cursor:pointer}
+.ds-seg button[aria-checked="true"]{background:var(--ds-surface);color:var(--ds-ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.ds-seg button:focus-visible{outline:2px solid var(--ds-accent)}
+/* Feier-Effekt mit Konfetti */
+.ds-yay{position:fixed;inset:0;z-index:140;display:grid;place-items:center;pointer-events:none;overflow:hidden}
+.ds-yay-card{position:relative;background:var(--ds-surface);color:var(--ds-ink);border-radius:24px;padding:22px 28px 16px;display:grid;justify-items:center;gap:8px;min-width:150px;box-shadow:0 18px 50px rgba(0,0,0,.28);animation:dsYayIn .45s cubic-bezier(.3,1.35,.5,1) both,dsYayOut .28s ease-in 1.2s forwards}
+.ds-yay svg{width:64px;height:64px}
+.ds-yay .yc{fill:none;stroke:var(--ds-ok);stroke-width:3;stroke-dasharray:145;stroke-dashoffset:145;animation:dsInk .45s ease-out .08s forwards}
+.ds-yay .yk{fill:none;stroke:var(--ds-ok);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:34;stroke-dashoffset:34;animation:dsInk .28s ease-out .42s forwards}
+.ds-yay b{font-size:15px;font-weight:700}
+.ds-yay i{position:absolute;left:50%;top:54px;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--c);opacity:0;animation:dsSpark .65s ease-out .5s}
+.ds-yay em{position:absolute;top:-16px;left:var(--x);width:8px;height:13px;border-radius:2px;background:var(--c);transform:scale(var(--s));animation:dsFall 2.2s cubic-bezier(.25,.6,.5,1) var(--d) forwards;opacity:0}
+@keyframes dsInk{to{stroke-dashoffset:0}}
+@keyframes dsSpark{0%{opacity:1;transform:rotate(var(--a)) translateY(-30px) scale(1)}100%{opacity:0;transform:rotate(var(--a)) translateY(-64px) scale(.3)}}
+@keyframes dsYayIn{from{opacity:0;transform:scale(.6)}}
+@keyframes dsYayOut{to{opacity:0;transform:scale(.92)}}
+@keyframes dsFall{0%{opacity:1;transform:translateY(0) rotate(0) scale(var(--s))}85%{opacity:1}100%{opacity:0;transform:translateY(105vh) rotate(var(--r)) scale(var(--s))}}
+/* Entsperr-Animation */
+.ds-unl{position:fixed;z-index:130;width:0;height:0;pointer-events:none}
+.ds-unl span{position:absolute;left:0;top:0;border-radius:50%;transform:translate(-50%,-50%)}
+.ds-unl-light .glow{width:72px;height:72px;background:radial-gradient(circle,rgba(255,214,90,.95) 0%,rgba(255,196,60,.45) 45%,rgba(255,196,60,0) 72%);animation:dsGlow .7s ease-out forwards}
+.ds-unl-light .ray{width:72px;height:72px;background:conic-gradient(from 0deg,rgba(255,206,84,.55) 0 8deg,transparent 8deg 30deg,rgba(255,206,84,.55) 30deg 38deg,transparent 38deg 60deg,rgba(255,206,84,.55) 60deg 68deg,transparent 68deg 90deg);
+  -webkit-mask:radial-gradient(circle,transparent 42%,#000 44%,#000 70%,transparent 72%);mask:radial-gradient(circle,transparent 42%,#000 44%,#000 70%,transparent 72%);animation:dsRays .7s ease-out forwards}
+.ds-unl-light-ico{animation:dsLit .68s ease-out forwards}
+@keyframes dsGlow{0%{width:40px;height:40px;opacity:0}40%{opacity:1}100%{width:260px;height:260px;opacity:.9}}
+@keyframes dsRays{0%{width:60px;height:60px;opacity:0;transform:translate(-50%,-50%) rotate(-20deg)}50%{opacity:1}100%{width:230px;height:230px;opacity:.85;transform:translate(-50%,-50%) rotate(15deg)}}
+@keyframes dsLit{0%{filter:none}35%{filter:brightness(1.6) saturate(1.2) drop-shadow(0 0 14px rgba(255,205,80,.95))}100%{filter:brightness(1.25) drop-shadow(0 0 22px rgba(255,205,80,.9));transform:scale(1.06)}}
+.ds-unl-heart .ring{width:72px;height:72px;border:3px solid var(--ds-accent);opacity:0;animation:dsRing .75s ease-out forwards}
+.ds-unl-heart .r2{animation-delay:.28s}
+.ds-unl-heart-ico{animation:dsBeat .76s ease-in-out forwards}
+@keyframes dsRing{0%{width:72px;height:72px;opacity:.8}100%{width:220px;height:220px;opacity:0}}
+@keyframes dsBeat{0%{transform:scale(1)}14%{transform:scale(1.18)}28%{transform:scale(.98)}42%{transform:scale(1.13)}70%{transform:scale(1)}100%{transform:scale(1.04)}}
+/* Sicherungs-Status: Punkt am Schloss */
+.ds-lockbtn{position:relative}
+.ds-lockbtn[data-bk]:not([data-bk=""])::after{content:"";position:absolute;top:5px;right:5px;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 2px var(--ds-surface);background:var(--ds-ok)}
+.ds-lockbtn[data-bk="warn"]:not([data-bk=""])::after{background:var(--ds-warn);animation:dsDot 2.4s ease-in-out infinite}
+.ds-lockbtn[data-bk="crit"]:not([data-bk=""])::after{background:var(--ds-crit);animation:dsDot 1.6s ease-in-out infinite}
+@keyframes dsDot{50%{transform:scale(1.35)}}
+@media (prefers-reduced-motion:reduce){.ds-lockbtn::after{animation:none!important}}
+/* Haken beim Speichern */
+.ds-saved{background:var(--ds-ok)!important;border-color:var(--ds-ok)!important;color:#fff!important;display:inline-flex!important;align-items:center;justify-content:center;gap:6px}
+.ds-saved .tk{stroke-dasharray:24;stroke-dashoffset:24;animation:dsInk .3s ease-out forwards}
+/* Wechsel zwischen den Boxen */
+.ds-boxes{display:flex;flex-direction:column;background:var(--ds-surface);border:1px solid var(--ds-line);border-radius:14px;overflow:hidden;margin:0 0 6px}
+.ds-boxlink{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;color:var(--ds-ink);text-decoration:none}
+.ds-boxlink+.ds-boxlink{border-top:1px solid var(--ds-line)}
+.ds-boxlink .ds-qt{display:grid;gap:2px;min-width:0}
+.ds-boxlink .ds-qt b{font-size:15px;font-weight:700}
+.ds-boxlink .ds-qt small{font-size:13px;color:var(--ds-muted)}
+.ds-boxlink .chev{width:20px;height:20px;color:var(--ds-muted)}
+.ds-boxico{width:36px;height:36px;border-radius:10px;display:block}
 
 /* App-spezifisch: Bereiche im Blatt wie in MyGesundBox / MyBelegBox (Pfeil nach unten, Trennlinie) */
 #bxsbody .acc{padding:0;font-weight:400}
@@ -1676,9 +1729,18 @@ header.hero .top .bxbtns{flex:none;gap:6px}
 .panel .ds-pclose{flex:none}
 .panel .field label{font-size:13px!important;font-weight:700!important;color:var(--muted)}
 .panel .actions .btn{min-height:42px;padding:0 16px;font-size:15px;font-weight:600;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.ds-boxwrap{margin-top:8px}
+/* Nachts: Lampen im Grundriss leuchten warm */
+.pin.glow .head{box-shadow:0 0 0 3px rgba(255,236,180,.95),0 0 18px 8px rgba(255,190,90,.85);filter:saturate(1.1) brightness(1.08)}
+body.motion .pin.glow .head{animation:dsLamp 4.5s ease-in-out infinite}
+@keyframes dsLamp{50%{box-shadow:0 0 0 3px rgba(255,236,180,.8),0 0 12px 5px rgba(255,190,90,.6)}}
+/* Stromausfall: der Plan wird kurz dunkel */
+.canvas.poweroff::after{content:"";position:absolute;inset:0;background:#05080f;pointer-events:none;z-index:5;animation:dsPowerOff 1.3s ease-out forwards}
+@keyframes dsPowerOff{0%{opacity:0}12%{opacity:.55}20%{opacity:.1}30%{opacity:.6}45%{opacity:.35}100%{opacity:0}}
 
 /* ds:end */
 </style>
+<script src="ds.js" data-app="smartbox"></script>
 </head>
 <body class="bxlocked">
 <div id="lock" class="bxlock" hidden><form id="lockForm" class="bxlockbox" autocomplete="on">
@@ -1696,6 +1758,7 @@ header.hero .top .bxbtns{flex:none;gap:6px}
     <div class="bxgh" id="lgh" hidden>
       <label for="lgh_o">Konto / Organisation</label><input id="lgh_o" value="jazm-smartbox" autocomplete="off" autocapitalize="off">
       <label for="lgh_r">Repo</label><input id="lgh_r" value="smartbox-daten" autocomplete="off" autocapitalize="off">
+      <label for="lgh_d">Ordner im Repo (optional)</label><input id="lgh_d" value="" placeholder="leer lassen oder z. B. smartbox" autocomplete="off" autocapitalize="off">
       <label for="lgh_t">Zugangsschlüssel (github_pat_…)</label><input id="lgh_t" type="password" autocomplete="off">
       <div class="bxerr" id="lgh_msg"></div>
       <button type="button" class="bxpri" id="lgh_go">Sicherung von GitHub laden</button>
