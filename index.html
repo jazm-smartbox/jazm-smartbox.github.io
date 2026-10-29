@@ -1437,7 +1437,7 @@ body.bxsheet-open{overflow:hidden}
 html,body{background:var(--bg)!important;color:var(--ink);font:16px/1.4 var(--f-body)}
 body::before{background:var(--bg)!important}
 .bgfx,.bgfx.pcbwrap,.tabind{display:none!important}
-*:not(#fab):not(.bxptr):not(.pin .head):not(.hm-sun):not(.bxfan button){box-shadow:none!important}
+*:not(#fab):not(.bxptr):not(.pin .head):not(.hm-sun):not(.bxfan button):not(.m3d .head):not(.pin.glow .head){box-shadow:none!important}
 
 /* Kopf */
 header.hero{padding-block:calc(14px + 0px) 6px}
@@ -1538,6 +1538,13 @@ body:has(#modal .overlay) #fab,body:has(#rmodal .overlay) #fab{visibility:hidden
 @media (prefers-reduced-motion:reduce){.bxprog.busy::after{animation:none;width:100%;opacity:.4}}
 #bxUpd{font-size:14px;font-weight:600}
 .btn:disabled{opacity:.6;cursor:default}
+.m3d{left:0!important;top:0!important}
+.s3d-cam{will-change:transform}
+/* Beim Drehen nur Wände, Grundriss und Logos zeigen – Möbel, Glas und Stäbe kommen beim Loslassen zurück */
+.s3d.moving .stick,.s3d.moving .glass,.s3d.moving .pool,.s3d.moving i.f:not(.wl):not(.anc){visibility:hidden}
+.s3d.intro .wl{animation:wlIn .9s ease-out both}
+@keyframes wlIn{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.s3d.intro .wl{animation:none}}
 .hm-cmdico{background:var(--accent-soft);color:var(--accent);border-radius:10px}
 .bxlockbox{border-radius:20px}
 .bxlockico{border-radius:18px}

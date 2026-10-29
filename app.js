@@ -1919,18 +1919,24 @@ function occluded(px, py, pz){
   }
   return false;
 }
-/* Logos liegen über dem 3D-Modell, damit Wände sie nicht verdecken */
-function placeMarkers(){
+/* Logos liegen über dem 3D-Modell, damit Wände sie nicht verdecken.
+   Erst alle Positionen lesen, dann alles schreiben (sonst rechnet der Browser das Modell pro Logo neu).
+   Die Wand-Prüfung läuft beim Drehen höchstens alle 250 ms und am Ende einmal vollständig. */
+let occAt = 0, occTimer = 0;
+function placeMarkers(full){
   const st = document.getElementById("s3d"), L = document.getElementById("m3l"); if (!st || !L) return;
-  const sr = st.getBoundingClientRect();
-  for (const m of L.children) {
-    const a = st.querySelector(`.anc[data-id="${m.dataset.id}"]`); if (!a) { m.style.display = "none"; continue; }
-    const r = a.getBoundingClientRect(), x = r.left + r.width / 2 - sr.left, y = r.top + r.height / 2 - sr.top;
-    m.style.display = ""; m.style.left = x + "px"; m.style.top = y + "px";
-    const [px, py, pz] = (a.dataset.p || "0,0,0").split(",").map(Number), behind = occluded(px, py, pz + lvlZ(+a.dataset.l || 0));
-    m.classList.toggle("behind", behind);
-    m.style.zIndex = (behind ? 5 : 1000) + Math.round(y);
-  }
+  const sr = st.getBoundingClientRect(), anc = new Map();
+  for (const a of st.querySelectorAll(".anc")) anc.set(a.dataset.id, a);
+  const ms = [...L.children], pos = ms.map(m => { const a = anc.get(m.dataset.id); if (!a) return null; const r = a.getBoundingClientRect(); return [r.left + r.width / 2 - sr.left, r.top + r.height / 2 - sr.top, a]; });
+  const now = performance.now(), occ = full === true || now - occAt > 250; if (occ) occAt = now;
+  ms.forEach((m, i) => {
+    const q = pos[i]; if (!q) { m.style.display = "none"; return; }
+    const [x, y, a] = q; if (m.style.display) m.style.display = "";
+    m.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
+    if (occ) { const [px, py, pz] = (a.dataset.p || "0,0,0").split(",").map(Number); m.classList.toggle("behind", occluded(px, py, pz + lvlZ(+a.dataset.l || 0))); }
+    m.style.zIndex = (m.classList.contains("behind") ? 5 : 1000) + Math.round(y);
+  });
+  clearTimeout(occTimer); if (!occ) occTimer = setTimeout(() => placeMarkers(true), 260);
 }
 let wallBoxes = [], lvlBase = [0], houseGap = 0, houseRoof = true, introHouse = false, houseDevs = false;
 const HOUSE_SLAB = 8;
@@ -2016,6 +2022,8 @@ function render3d(){
   <div class="s3d" id="s3d" data-vw="${vw}" data-vh="${vh}"><div class="s3d-cam" id="cam3d"><div class="s3d-world" id="w3d" style="width:${vw}px;height:${vh}px;left:${-vw / 2}px;top:${-vh / 2}px">${world3d(intro3d === curFloor ? wall3d : 0)}</div></div>
   ${fx.daylight ? daylightHtml(true) : ""}<div class="m3layer" id="m3l">${markers3d()}</div><p class="s3dhint">Ein Finger dreht · zwei Finger schieben und zoomen · Gerät antippen öffnet es</p></div>`;
 }
+let camQ = 0;
+function camLater(){ if (!camQ) camQ = requestAnimationFrame(() => { camQ = 0; applyCam(false); }); }
 function applyCam(smooth){
   const c = document.getElementById("cam3d"), st = document.getElementById("s3d"); if (!c || !st) return;
   const vw = +st.dataset.vw, vh = +st.dataset.vh; if (!vw) return;
@@ -2024,20 +2032,19 @@ function applyCam(smooth){
   c.style.transition = smooth ? "transform .6s cubic-bezier(.2,.8,.2,1),left .6s cubic-bezier(.2,.8,.2,1),top .6s cubic-bezier(.2,.8,.2,1)" : "none";
   c.style.left = `calc(50% + ${cam3d.px}px)`; c.style.top = `calc(44% + ${cam3d.py}px)`;
   c.style.transform = `scale(${k}) rotateX(${cam3d.rx}deg) rotateZ(${cam3d.rz}deg)`;
-  c.style.setProperty("--rx", cam3d.rx + "deg"); c.style.setProperty("--rz", cam3d.rz + "deg"); c.style.setProperty("--k", k);
   if (smooth) { const t0 = performance.now(); const f = t => { placeMarkers(); if (t - t0 < 700) requestAnimationFrame(f); }; requestAnimationFrame(f); } else placeMarkers();
 }
 function init3d(){
   applyCam(false);
   if (intro3d === curFloor || matchMedia("(prefers-reduced-motion: reduce)").matches) { intro3d = curFloor; const w = document.getElementById("w3d"); if (w && w.dataset.full !== "1") { w.innerHTML = world3d(wall3d); w.dataset.full = "1"; } placeMarkers(); return; }
   intro3d = curFloor;
+  { const w = document.getElementById("w3d"), st = document.getElementById("s3d"); if (w) { w.innerHTML = world3d(wall3d); w.dataset.full = "1"; } if (st) { st.classList.add("intro"); setTimeout(() => st.classList.remove("intro"), 1300); } }
   const target = {...cam3d}, t0 = performance.now(), D = 1100, from = {rx: 0, rz: target.rz - 50};
   const step = t => {
     const w = document.getElementById("w3d"); if (!w) return;
     const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3);
     cam3d.rx = from.rx + (target.rx - from.rx) * e; cam3d.rz = from.rz + (target.rz - from.rz) * e; applyCam(false);
-    if (k > .3) { w.innerHTML = world3d(Math.round(wall3d * Math.min(1, (k - .3) / .7))); placeMarkers(); }
-    if (k < 1) requestAnimationFrame(step); else { Object.assign(cam3d, {rx: target.rx, rz: target.rz}); w.innerHTML = world3d(wall3d); w.dataset.full = "1"; placeMarkers(); }
+    if (k < 1) requestAnimationFrame(step); else { Object.assign(cam3d, {rx: target.rx, rz: target.rz}); applyCam(false); placeMarkers(true); }
   };
   requestAnimationFrame(step);
 }
@@ -2051,27 +2058,29 @@ document.addEventListener("pointerdown", e => {
   const st = e.target.closest("#s3d"); if (!st) return;
   ptr3.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (ptr3.size === 1) { moved3 = false; g3 = {x: e.clientX, y: e.clientY, rx: cam3d.rx, rz: cam3d.rz, px: cam3d.px, py: cam3d.py, pan: e.pointerType === "mouse" && (e.shiftKey || e.button === 2)}; }
-  else if (ptr3.size === 2) { const [a, b] = [...ptr3.values()]; g3 = {pinch: Math.hypot(a.x - b.x, a.y - b.y), k: cam3d.k, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, px: cam3d.px, py: cam3d.py}; moved3 = true; cam3d.auto = false; }
+  else if (ptr3.size === 2) { const [a, b] = [...ptr3.values()]; g3 = {pinch: Math.hypot(a.x - b.x, a.y - b.y), k: cam3d.k, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, px: cam3d.px, py: cam3d.py}; moved3 = true; cam3d.auto = false; st.classList.add("moving"); }
 });
 document.addEventListener("pointermove", e => {
   if (!ptr3.has(e.pointerId) || !g3) return;
   ptr3.set(e.pointerId, {x: e.clientX, y: e.clientY});
   if (g3.pinch) { const [a, b] = [...ptr3.values()]; if (!b) return;
     cam3d.k = Math.max(.5, Math.min(3.5, g3.k * Math.hypot(a.x - b.x, a.y - b.y) / g3.pinch));
-    cam3d.px = g3.px + (a.x + b.x) / 2 - g3.mx; cam3d.py = g3.py + (a.y + b.y) / 2 - g3.my; applyCam(false); return; }
+    cam3d.px = g3.px + (a.x + b.x) / 2 - g3.mx; cam3d.py = g3.py + (a.y + b.y) / 2 - g3.my; camLater(); return; }
   const dx = e.clientX - g3.x, dy = e.clientY - g3.y;
   if (g3.after2 && Math.hypot(dx, dy) < 30) return;
   if (!moved3 && Math.hypot(dx, dy) < 6) return;
+  if (!moved3) document.getElementById("s3d")?.classList.add("moving");
   moved3 = true; cam3d.auto = false;
-  if (g3.pan) { cam3d.px = g3.px + dx; cam3d.py = g3.py + dy; applyCam(false); return; }
-  cam3d.rz = g3.rz - dx * .35; cam3d.rx = Math.max(0, Math.min(80, g3.rx - dy * .3)); applyCam(false);
+  if (g3.pan) { cam3d.px = g3.px + dx; cam3d.py = g3.py + dy; camLater(); return; }
+  cam3d.rz = g3.rz - dx * .35; cam3d.rx = Math.max(0, Math.min(80, g3.rx - dy * .3)); camLater();
 });
-const end3 = e => { ptr3.delete(e.pointerId); if (!ptr3.size) g3 = null; else if (ptr3.size === 1) { const [a] = [...ptr3.values()]; g3 = {x: a.x, y: a.y, rx: cam3d.rx, rz: cam3d.rz, px: cam3d.px, py: cam3d.py, after2: true}; } };
+const end3 = e => { const had = ptr3.has(e.pointerId); ptr3.delete(e.pointerId); if (had && !ptr3.size) { document.getElementById("s3d")?.classList.remove("moving"); if (moved3) setTimeout(() => placeMarkers(true), 30); } if (!ptr3.size) g3 = null; else if (ptr3.size === 1) { const [a] = [...ptr3.values()]; g3 = {x: a.x, y: a.y, rx: cam3d.rx, rz: cam3d.rz, px: cam3d.px, py: cam3d.py, after2: true}; } };
 document.addEventListener("contextmenu", e => { if (e.target.closest("#s3d")) e.preventDefault(); });
 document.addEventListener("pointerup", end3); document.addEventListener("pointercancel", end3);
 document.addEventListener("click", e => { if (moved3 && e.target.closest("#s3d")) { e.stopPropagation(); e.preventDefault(); moved3 = false; } }, true);
-document.addEventListener("wheel", e => { if (!e.target.closest("#s3d")) return; e.preventDefault(); cam3d.k = Math.max(.5, Math.min(3.5, cam3d.k * (e.deltaY < 0 ? 1.1 : .9))); applyCam(false); }, {passive: false});
-window.addEventListener("resize", () => applyCam(false));
+document.addEventListener("wheel", e => { if (!e.target.closest("#s3d")) return; e.preventDefault(); cam3d.k = Math.max(.5, Math.min(3.5, cam3d.k * (e.deltaY < 0 ? 1.1 : .9))); const s3 = document.getElementById("s3d"); s3?.classList.add("moving"); clearTimeout(wheelT); wheelT = setTimeout(() => { s3?.classList.remove("moving"); placeMarkers(true); }, 220); camLater(); }, {passive: false});
+let wheelT = 0;
+window.addEventListener("resize", camLater);
 
 
 /* ================= Übersicht ================= */

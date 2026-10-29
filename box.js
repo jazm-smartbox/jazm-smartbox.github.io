@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.3.1';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
