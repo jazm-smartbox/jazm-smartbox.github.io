@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.github.com data: blob:; frame-ancestors 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#2456E0">
+<meta name="theme-color" content="#F3F6FB">
 <title>MySmartBox</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -516,7 +516,7 @@ body.fs-open .bottomnav,body.fs-open .fab{display:none}
   --c13:#0F7FA8; --c13-soft:#DCEFF6; --c14:#A3168E; --c14-soft:#F7E0F2;
   --f-display:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; --f-body:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme:light;}
-*,*::before,*::after{border-radius:0!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important}
+*,*::before,*::after{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body)}
 .bgfx,.mapwrap.fs::before{display:none}
 body::before{background:var(--bg)}
@@ -1349,6 +1349,109 @@ body.bxsheet-open{overflow:hidden}
 @keyframes bxspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#bxspanel,#bxsheet .sbg{transition:none!important}}
 #bxsbody .acchd .ai svg{transform:none!important;animation:none!important}
+
+/* ===== Box-Design: Optik wie MyGesundBox / MyBelegBox, in Blau ===== */
+:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{
+  --bg:#F3F6FB; --surface:#FFFFFF; --glass:#FFFFFF; --glass-strong:#FFFFFF; --surface2:#EEF3FA;
+  --ink:#14203A; --muted:#5B6883; --line:#DDE5F1; --line2:#E8EEF7;
+  --accent:#1F5FBF; --accent-ink:#FFFFFF; --accent-soft:#E3ECFA; --ok:#15803D; --danger:#DC2626;
+  --shadow:none; --r-card:16px; --r-ctl:12px;
+  --f-display:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --f-body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:light}
+html,body{background:var(--bg)!important;color:var(--ink);font:16px/1.4 var(--f-body)}
+body::before{background:var(--bg)!important}
+.bgfx,.bgfx.pcbwrap,.tabind{display:none!important}
+*:not(#fab):not(.bxptr):not(.pin .head):not(.hm-sun):not(.bxfan button){box-shadow:none!important}
+
+/* Kopf */
+header.hero{padding-block:calc(14px + 0px) 6px}
+.brand h1{font-size:24px!important;font-weight:800!important}
+.bxmark{border-radius:9px}
+.bxico{border-radius:12px;background:var(--surface);border-color:var(--line)}
+.vtitle h2{font-size:22px;font-weight:800}
+
+/* Untere Leiste mit Pill */
+.bottomnav{background:var(--surface)!important;border-top:1px solid var(--line)!important;border-radius:0}
+.bottomnav .tab{font-size:12px;color:var(--muted);padding:6px 4px 10px;gap:3px}
+.bottomnav .tab .pill{width:60px;height:30px;border-radius:99px;background:none}
+.bottomnav .tab[aria-selected="true"]{color:var(--accent);font-weight:700}
+.bottomnav .tab[aria-selected="true"] .pill{background:var(--accent-soft)!important;color:var(--accent)}
+.bottomnav .tab[aria-selected="true"]::after{display:none!important}
+
+/* Knopf „Neu“ und Fächer */
+#fab.fab{background:var(--accent);color:var(--accent-ink);border-radius:18px;box-shadow:0 6px 18px rgba(15,45,110,.3)!important}
+#fab.fab.open{border-radius:50%}
+.bxfan .fi button{border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.14)!important}
+.bxfan .fs{background:rgba(5,15,40,.32)}
+
+/* Karten und Listen */
+.hm-card,.hm-fl,.hm-act,.list,.room .list.rows,.room .dev.tile,.acc,.stat,.banner,.empty,.sheet .canvaswrap,.rtile,.confirm,.oc-det{border-radius:var(--r-card)}
+.hm-card,.hm-fl,.hm-act,.list,.room .list.rows,.room .dev.tile,.acc{background:var(--surface)!important;border:1px solid var(--line)!important}
+.list,.room .list.rows,.acc{overflow:hidden}
+.room .list:not(.rows){background:none!important;border:0!important}
+.row,.roomrow,.dev{border-top-color:var(--line2)}
+.rico,.ico,.tile .ico{border-radius:10px!important}
+.abadge,.aimg,.aprev{border-radius:5px}
+.aprev{border-radius:10px}
+h2.sec,.hm-lbl{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.sechd .sect{font-size:17px;font-weight:800}
+.chip,.gtag,.voice,.rchip,.filterchip,.oc-chip,.badge,.hm-pill,.obadge{border-radius:999px}
+.dot,.legend span::before,.oc-chip i{border-radius:50%!important}
+.st,.st i,.hm-bar,.hm-bar i,.hm-mini,.hm-mini i,.dist i{border-radius:99px}
+
+/* Startseite wie MyGesundBox: Begrüßung ohne dunkle Karte */
+.hm-hello,.hm-hello.day,.hm-hello.night{background:none!important;color:var(--ink);padding:4px 56px 6px 2px;margin-bottom:8px;overflow:visible}
+.hm-hello h2{font-size:22px;font-weight:800;margin:0 0 2px}
+.hm-hello p{color:var(--muted);opacity:1;font-size:14px}
+.hm-hello .hm-sub{color:var(--ink);font-weight:600}
+.hm-star{display:none}
+.hm-sun{right:6px;top:6px;width:30px;height:30px}
+.hm-hello.night .hm-sun{box-shadow:inset -8px -3px 0 0 #9DB4DA!important}
+.hm-ring{color:var(--accent)}
+.hm-mini i{background:var(--accent)}
+.hm-act{gap:6px;color:var(--ink)}
+.hm-act svg{color:var(--accent)}
+.hm-todo button{border-top-color:var(--line2)}
+
+/* Bedienelemente */
+.btn{border-radius:var(--r-ctl);background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+.btn.small{border-radius:10px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:var(--danger);background:none}
+input,select,textarea{border-radius:var(--r-ctl)}
+.field input,.field select,.field textarea,.sbig input,.tools input,.tools select{border-radius:var(--r-ctl)!important;background:var(--surface);border:1px solid var(--line)}
+.panel .field input,.panel .field select,.panel .field textarea{background:var(--bg)}
+.fbar{border-radius:14px;overflow:hidden;background:var(--surface);border:1px solid var(--line)}
+.fpanel{border-radius:0 0 14px 14px}
+.fclear{border-radius:0}
+.segsw,.bxseg,.floors,.zoom{border-radius:12px!important;overflow:hidden}
+.segsw{background:var(--line2)!important;border:0!important;padding:3px!important;gap:2px!important}
+.segsw button{border-radius:9px!important;border:0!important;color:var(--muted)}
+.segsw button[aria-pressed="true"]{background:var(--surface)!important;color:var(--ink)!important;font-weight:700;box-shadow:0 1px 3px rgba(10,20,40,.12)!important}
+.bxseg{background:var(--line2)}
+.bxseg button[aria-selected="true"]{box-shadow:0 1px 3px rgba(10,20,40,.12)!important}
+.floors{background:var(--line2)!important;border:0!important;padding:3px!important;gap:2px!important}
+.floorbtn{border-radius:9px!important;color:var(--muted)}
+.floorbtn[aria-pressed="true"]{background:var(--surface)!important;color:var(--ink)!important;box-shadow:0 1px 3px rgba(10,20,40,.12)!important}
+.mb-btn,.mb-place select,.row .open,.tile .open,.fsbtn,.fsfloor{border-radius:12px!important}
+.mapbar .zoom{border-radius:12px!important}
+.canvaswrap,.canvas{border-radius:var(--r-card)!important}
+.placehint{border-radius:12px}
+
+/* Blätter, Fenster, Hinweise */
+.panel{border-radius:20px 20px 0 0!important;background:var(--surface)!important}
+@media (min-width:600px){.panel{border-radius:20px!important}}
+.overlay{background:rgba(5,15,40,.38);z-index:30}
+body:has(#modal .overlay) #fab,body:has(#rmodal .overlay) #fab{visibility:hidden}
+.toast{border-radius:12px;background:var(--ink);color:#fff}
+.outcard{border-radius:var(--r-card);overflow:hidden}
+.oc-on,.oc-fuse{border-radius:10px}
+.oc-k{border-radius:0}
+.gpick .rchip[aria-pressed="true"],.rchip[aria-pressed="true"]{background:var(--accent)!important;border-color:var(--accent)!important;color:#fff!important}
+.sw{border-radius:99px!important}.sw::after{border-radius:50%!important}
+.hm-cmdico{background:var(--accent-soft);color:var(--accent);border-radius:10px}
+.bxlockbox{border-radius:20px}
+.bxlockico{border-radius:18px}
 
 </style>
 </head>
