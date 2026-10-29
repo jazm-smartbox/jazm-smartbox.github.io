@@ -1,1 +1,1 @@
-# https-jazm-smartbox.github.io
+# jazm-smartbox.github.io

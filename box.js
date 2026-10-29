@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.5.1';
+const APP_VERSION='1.5.2';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -129,6 +129,8 @@ async function unlockWith(pw){
   const p=JSON.parse(vaultJson),k=await derive(pw,unb64(p.salt)),o=await decryptObj(p,k);
   SALT=unb64(p.salt);KEY=k;VID=p.vid||b64(rnd(12));
   STATE=o&&o.s?o.s:{};META=o&&o.m&&typeof o.m==='object'?o.m:{};
+  /* Repo wurde in jazm-smartbox.github.io umbenannt: gespeicherte Update-Verbindung mitziehen */
+  if(META.github&&/^jazm-smartbox\/https-jazm-smartbox\.github\.io$/i.test(META.github.repo||'')){META.github={...META.github,repo:'jazm-smartbox/jazm-smartbox.github.io'};setTimeout(()=>save({clean:true}),0)}
   if(!p.vid)save({clean:true});
   /* Licht geht an, dann öffnet sich die App (wie die Tresortür der MyBelegBox) */
   DS.unlockAnim($('#lock'),$('#lock .bxlockico'),'light',()=>{if(!KEY)return;$('#lock').hidden=true;document.body.classList.remove('bxlocked')});
