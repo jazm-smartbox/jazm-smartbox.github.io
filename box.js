@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.4.1';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -243,12 +243,12 @@ function bkSetup(){
     const g={owner:v.owner.trim(),repo:v.repo.trim(),token:v.token.trim()};
     try{const info=await bkFetch(g,'GET','');
       if(!info)return ferr(bkErrText({status:404}));
-      if(!info.private)return ferr('Dieses Repo ist öffentlich. Gesichert wird nur in private Repos.');
-      if(info.permissions&&info.permissions.push===false)return ferr('Der Schlüssel darf nicht in dieses Repo schreiben (Contents: Read and write).');
+      if(!info.private)return ferr('Dieses Repo ist öffentlich. Aus Sicherheitsgründen sichert die MySmartBox nur in private Repos.');
+      if(info.permissions&&info.permissions.push===false)return ferr('Der Schlüssel darf in dieses Repo nicht schreiben. Setze „Contents“ auf „Read and write“.');
     }catch(e){return ferr(bkErrText(e))}
     META.backupGh=g;setBk({err:'',at:0,conflict:false});await save({clean:true});refresh();
     setTimeout(async()=>{await bkSync();if(!bkStat.err)toast('Automatische Sicherung ist aktiv ✓');refresh()},50);
-  },{ok:'Verbinden & sichern',html:'<p class="bxnote">Sichert den verschlüsselten Tresor nach jeder Änderung in ein <b>privates</b> GitHub-Repo. GitHub sieht nur verschlüsselte Daten. Schlüssel: nur dieses Repo, <b>Contents: Read and write</b>.</p>'});
+  },{ok:'Verbinden & sichern',html:'<p class="ds-dlg-intro">Sichert den verschlüsselten Tresor nach jeder Änderung in ein <b>privates</b> GitHub-Repo. GitHub sieht nur verschlüsselte Daten. Zugangsschlüssel: nur für dieses Repo, mit <b>Contents: Read and write</b>.</p>'});
 }
 
 /* ---------- App-Update direkt aus der App ---------- */
@@ -270,11 +270,11 @@ async function gh(path,opt={},tok){
   return j;
 }
 function ghSetup(){
-  form('Updates: GitHub verbinden',[{k:'token',l:'Fine-grained Token (github_pat_…)',t:'password',req:true},{k:'repo',l:'Repo (Besitzer/Name)',req:true,v:META.github?.repo||defaultRepo()}],async v=>{
+  form('App-Update verbinden',[{k:'repo',l:'Repo (Besitzer/Name)',req:true,v:META.github?.repo||defaultRepo()},{k:'token',l:'Zugangsschlüssel (github_pat_…)',t:'password',req:true}],async v=>{
     const repo=v.repo.trim().replace(/^https:\/\/github\.com\//,'').replace(/\/$/,''),token=v.token.trim();
-    try{const j=await gh('/repos/'+repo,{},token);if(j.permissions&&!j.permissions.push)return ferr('Token hat keine Schreibrechte für das Repo.')}catch(e){return ferr(e.message)}
+    try{const j=await gh('/repos/'+repo,{},token);if(j.permissions&&!j.permissions.push)return ferr('Der Schlüssel darf in dieses Repo nicht schreiben. Setze „Contents“ auf „Read and write“.')}catch(e){return ferr(e.message)}
     META.github={token,repo};await save({clean:true});toast('GitHub verbunden ✓');refresh();
-  },{ok:'Prüfen & speichern',html:'<p class="bxnote">Der Token wird verschlüsselt in der MySmartBox gespeichert und nur für Updates genutzt. Rechte: <b>Contents: Read and write</b> und <b>Actions: Read</b>, nur für das App-Repo.</p>'});
+  },{ok:'Prüfen & verbinden',html:'<p class="ds-dlg-intro">Dafür brauchst du einen eigenen Fine-grained-Zugangsschlüssel nur für das App-Repo mit den Rechten <b>Contents: Read and write</b> und <b>Actions: Read</b>. Er wird verschlüsselt im Tresor gespeichert. Der Schlüssel der Datensicherung reicht dafür nicht.</p>'});
 }
 function pickFile(accept){return new Promise(res=>{const i=$('#bxFile');i.value='';i.accept=accept;pickingUntil=Date.now()+10*60e3;i.onchange=()=>res(i.files[0]||null);i.click()})}
 async function ghUpload(){
@@ -312,31 +312,46 @@ async function watchRun(repo,tok,sha){
   while(Date.now()-t1<5*60e3){
     await new Promise(r=>setTimeout(r,5000));
     try{const js=await (await fetch('./box.js?v='+Date.now(),{cache:'no-store'})).text();const v=(js.match(/APP_VERSION='([\d.]+)'/)||[])[1];
-      if(v&&v!==APP_VERSION){UPBUSY=false;setUpd(`🎉 Version ${esc(v)} ist online. <button class="btn small primary" data-box="reload">Jetzt neu laden</button>`,true);try{swReg&&swReg.update()}catch{}buzz([20,40,20]);return}}catch(e){}
+      if(v&&v!==APP_VERSION){UPBUSY=false;setUpd(`🎉 Version ${esc(v)} ist online.<div class="ds-acts"><button type="button" class="ds-btn pri" data-box="reload">Jetzt neu laden</button></div>`,true);try{swReg&&swReg.update()}catch{}buzz([20,40,20]);return}}catch(e){}
   }
   UPBUSY=false;setUpd('✅ Paket übernommen. Die Seite ist noch nicht aktualisiert (gleiche Version oder GitHub braucht länger) – später neu laden.'+link,true);
 }
 
 /* ---------- Bereiche in „Haus & Daten“ ---------- */
 function securityHtml(){
-  const bio=bioSupported()&&lsGet(BKEY);
-  return `<h2 class="sec">Sicherheit</h2><div class="list"><div class="roomrow"><span class="n">Passwort gesetzt · Fingerabdruck ${bio?'an':'aus'}</span></div>
-    <div class="roomrow bkrow">${bioSupported()?(bio?'<button class="btn small" data-box="bio-off">Fingerabdruck aus</button>':'<button class="btn small primary" data-box="bio-on">Fingerabdruck einrichten</button>'):''}<button class="btn small" data-box="pw">Passwort ändern</button><button class="btn small" data-box="lock">Jetzt sperren</button><button class="btn small danger" data-box="wipe">Alle Daten löschen</button></div></div>
-    <p class="note">Alle Daten liegen verschlüsselt auf diesem Gerät. Ohne dein Passwort kann sie niemand lesen – auch nicht in der GitHub-Sicherung.</p>`;
+  const bio=bioSupported()&&lsGet(BKEY),g=bkCfg();
+  return `<h2 class="sec">Sicherheit</h2>
+    <p class="ds-hint">Alle Daten liegen verschlüsselt auf diesem Gerät${g?' und als verschlüsselte Sicherung in deinem privaten GitHub-Repo':''}. Sonst wird nichts gesendet. Dein Passwort wird nicht gespeichert.</p>
+    ${bioSupported()?`<div class="ds-lbl">Fingerabdruck</div>
+    <p class="ds-hint">${bio?'Entsperren per Fingerabdruck ist eingeschaltet. Das Passwort funktioniert weiterhin und bleibt für den Notfall wichtig.':'Entsperre die MySmartBox mit Fingerabdruck oder Gesichtserkennung statt mit dem Passwort. Dafür wird ein Passkey „MySmartBox“ in deinem Passwortmanager angelegt.'}</p>
+    <div class="ds-acts">${bio?'<button type="button" class="ds-btn" data-box="bio-off">Ausschalten</button>':'<button type="button" class="ds-btn pri" data-box="bio-on">Einschalten</button>'}</div>`:''}
+    <div class="ds-lbl${bioSupported()?' sep':''}">Passwort</div>
+    <p class="ds-hint">Beim Ändern werden alle Daten neu verschlüsselt. Ältere Sicherungsdateien brauchen weiter das Passwort, das beim Sichern galt.</p>
+    <div class="ds-acts"><button type="button" class="ds-btn" data-box="pw">Passwort ändern</button></div>
+    <div class="ds-lbl sep">Alle Daten löschen</div>
+    <p class="ds-hint">Löscht alle Daten und Bilder auf diesem Gerät. Das lässt sich nicht rückgängig machen.</p>
+    <div class="ds-acts"><button type="button" class="ds-btn dng" data-box="wipe">Alle Daten löschen</button></div>`;
 }
 function backupHtml(){
-  const g=bkCfg();
-  return `<div class="list"><div class="roomrow"><span class="n"><b>GitHub</b> · <span id="bxBkStatus">${g?bkText():'nicht eingerichtet'}</span></span></div>
-    ${g&&bkStat.conflict?`<div class="roomrow confirm2"><span>Im Repo liegt ein anderer Tresor (z. B. von einem früheren Gerät). Er bleibt in der Versionsgeschichte von GitHub erhalten, wenn du ihn ersetzt.</span><span class="r2"><button class="btn small" data-box="bk-pull">GitHub-Stand laden</button><button class="btn small danger" data-box="bk-force">Durch diesen ersetzen</button></span></div>`:''}
-    <div class="roomrow bkrow">${g?'<button class="btn small primary" data-box="bk-now">Jetzt sichern</button><button class="btn small" data-box="bk-off">Trennen</button>':'<button class="btn small primary" data-box="bk-setup">GitHub einrichten</button>'}<button class="btn small" data-box="bk-file">Verschlüsselte Datei</button><button class="btn small" data-box="bk-restore">Datei laden</button></div></div>
-    <p class="note">${g?`Sichert nach jeder Änderung automatisch in <b>${esc(g.owner)}/${esc(g.repo)}</b>.`:'Mit GitHub wird nach jeder Änderung automatisch gesichert – verschlüsselt, in dein privates Repo.'} Die verschlüsselte Datei ist eine zusätzliche Kopie${META.lastFile?` (zuletzt ${new Date(META.lastFile+'T00:00').toLocaleDateString('de-DE')})`:''}.</p>
-    <div class="autohd"><span class="l">Lesbare Datei (ohne Verschlüsselung)</span></div>`;
+  const g=bkCfg(),lf=META.lastFile?new Date(META.lastFile+'T00:00').toLocaleDateString('de-DE'):'';
+  return `<div class="ds-lbl">Automatisch in GitHub</div>
+    ${g?`<p class="ds-hint">Nach jeder Änderung landet der verschlüsselte Tresor in <b>${esc(g.owner)}/${esc(g.repo)}</b>. GitHub sieht nur verschlüsselte Daten.</p>
+    <div class="ds-stat" id="bxBkStatus">${bkText()}</div>
+    ${bkStat.conflict?`<div class="ds-box crit">Im Repo liegt ein anderer Tresor (z. B. von einem früheren Gerät). Er bleibt in der Versionsgeschichte von GitHub erhalten, wenn du ihn ersetzt.<div class="ds-acts"><button type="button" class="ds-btn pri" data-box="bk-pull">GitHub-Stand laden</button><button type="button" class="ds-btn dng" data-box="bk-force">Durch diesen ersetzen</button></div></div>`:''}
+    <div class="ds-acts"><button type="button" class="ds-btn pri" data-box="bk-now">Jetzt sichern</button><button type="button" class="ds-btn" data-box="bk-off">Trennen</button></div>`
+    :`<p class="ds-hint">Sichert den verschlüsselten Tresor nach jeder Änderung in ein <b>privates</b> GitHub-Repo – auch wenn Browserdaten gelöscht werden, bleibt alles erhalten.</p>
+    <div class="ds-acts"><button type="button" class="ds-btn pri" data-box="bk-setup">GitHub einrichten</button></div>`}
+    <div class="ds-lbl sep">Sicherungsdatei</div>
+    <p class="ds-hint">Zusätzlich oder statt GitHub: eine Datei, die du selbst ablegst. Sie ist mit deinem aktuellen Passwort verschlüsselt und enthält auch alle Bilder. ${lf?'Letzte Sicherung: '+lf+'.':'Bisher keine Sicherung.'}</p>
+    <div class="ds-acts"><button type="button" class="ds-btn${g?'':' pri'}" data-box="bk-file">Sicherung erstellen</button><button type="button" class="ds-btn" data-box="bk-restore">Sicherung laden</button></div>`;
 }
 function updateHtml(){
-  return `<h2 class="sec">App-Update</h2><div class="list"><div class="roomrow"><span class="n">MySmartBox · Version ${APP_VERSION}${META.github?` · verbunden mit ${esc(META.github.repo)}`:''}</span></div>
-    <div class="roomrow bkrow">${META.github?'<button class="btn small primary" data-box="gh-upload"'+(UPBUSY?' disabled':'')+'>'+(UPBUSY?'Update läuft …':'Update-Zip hochladen')+'</button><button class="btn small" data-box="gh-setup">Verbindung ändern</button><button class="btn small" data-box="gh-off">Trennen</button>':'<button class="btn small primary" data-box="gh-setup">GitHub verbinden</button>'}</div>
-    <div class="roomrow" id="bxUpd"${UPD?'':' hidden'}>${UPD}</div></div>
-    <p class="note">Neue Versionen kommen als Zip. Hier hochladen – GitHub prüft und veröffentlicht sie in 1–2 Minuten.</p>`;
+  return `<h2 class="sec">App-Update</h2>
+    ${META.github?`<p class="ds-hint">Verbunden mit <b>${esc(META.github.repo)}</b>. Lade hier das Zip-Paket einer neuen Version hoch – GitHub prüft die Versionsnummer und veröffentlicht es in 1–2 Minuten.</p>
+    <div class="ds-acts"><button type="button" class="ds-btn pri" data-box="gh-upload"${UPBUSY?' disabled':''}>${UPBUSY?'Update läuft …':'Update-Zip hochladen'}</button><button type="button" class="ds-btn" data-box="gh-setup">Verbindung ändern</button><button type="button" class="ds-btn" data-box="gh-off">Trennen</button></div>`
+    :`<p class="ds-hint">Neue Versionen als Zip direkt aus der App veröffentlichen. Dafür brauchst du einen eigenen Zugangsschlüssel nur für das App-Repo.</p>
+    <div class="ds-acts"><button type="button" class="ds-btn pri" data-box="gh-setup">GitHub verbinden</button></div>`}
+    <div class="ds-box" id="bxUpd"${UPD?'':' hidden'}>${UPD}</div>`;
 }
 function refresh(){try{hooks.refresh&&hooks.refresh()}catch{}}
 
@@ -398,7 +413,8 @@ async function doRefresh(){
 
 /* ---------- Hinweis: neue Version ---------- */
 function showUpd(){if($('#bxupd'))return;const b=document.createElement('div');b.id='bxupd';b.className='bxupd';b.setAttribute('role','status');
-  b.innerHTML='<span>Neue Version der MySmartBox ist da.</span><button type="button">Aktualisieren</button>';
+  b.className='ds-updbar';b.innerHTML='<span>Neue Version der MySmartBox ist da.</span><button type="button" class="ds-btn pri">Aktualisieren</button><button type="button" class="ds-x" aria-label="Später">✕</button>';
+  b.querySelector('.ds-x').onclick=()=>b.remove();
   b.querySelector('button').onclick=async()=>{b.querySelector('button').disabled=true;try{hooks.flush&&hooks.flush()}catch{}try{await saving}catch{}location.reload()};
   document.body.appendChild(b);buzz(8)}
 
@@ -428,14 +444,14 @@ document.addEventListener('click',async e=>{
         {ok:'Weiter',html:'<p class="bxnote">Danach fragt dein Handy nach dem Fingerabdruck. Als Speicherort unbedingt den Google Passwortmanager wählen.</p>'});break;
     case 'bio-off':if(confirm('Fingerabdruck-Entsperrung deaktivieren?')){lsDel(BKEY);refresh();toast('Fingerabdruck deaktiviert. Den Passkey kannst du im Google Passwortmanager löschen.')}break;
     case 'pw':form('Passwort ändern',[{k:'old',l:'Aktuelles Passwort',t:'password',req:true},{k:'n1',l:'Neues Passwort (mind. 8 Zeichen)',t:'password',req:true},{k:'n2',l:'Neues Passwort wiederholen',t:'password',req:true}],async v=>{
-        try{await checkPw(v.old)}catch{return ferr('Aktuelles Passwort falsch.')}
-        if(v.n1.length<8)return ferr('Mindestens 8 Zeichen.');if(v.n1!==v.n2)return ferr('Die neuen Passwörter stimmen nicht überein.');
+        if(v.n1.length<8)return ferr('Das neue Passwort braucht mindestens 8 Zeichen.');if(v.n1!==v.n2)return ferr('Die neuen Passwörter stimmen nicht überein.');
+        try{await checkPw(v.old)}catch{return ferr('Das aktuelle Passwort ist falsch.')}
         SALT=rnd(16);KEY=await derive(v.n1,SALT);await save({clean:true});await saving;
-        if(lsGet(BKEY)){lsDel(BKEY);toast('Passwort geändert. Bitte den Fingerabdruck neu einrichten.')}else toast('Passwort geändert ✓');refresh()},{ok:'Ändern'});break;
+        if(lsGet(BKEY)){lsDel(BKEY);toast('Passwort geändert. Bitte den Fingerabdruck neu einrichten.')}else toast('Passwort geändert ✓');refresh()},{ok:'Passwort ändern'});break;
     case 'wipe':if(confirm('Wirklich ALLE Daten auf diesem Gerät löschen? Das lässt sich nicht rückgängig machen.')&&confirm('Ganz sicher? Ohne Sicherung sind die Daten weg.')){
         try{await idb.del('vault')}catch{}lsDel(VKEY);lsDel(BKEY);lsDel(GHS);location.reload()}break;
     case 'bk-setup':bkSetup();break;
-    case 'bk-now':await bkSync();refresh();if(!bkStat.err)toast('Gesichert ✓');break;
+    case 'bk-now':await bkSync();refresh();if(!bkStat.err)toast('Auf GitHub gesichert ✓');break;
     case 'bk-off':if(confirm('GitHub-Sicherung trennen? Im Repo bleibt alles liegen.')){delete META.backupGh;setBk({err:'',at:0,conflict:false});await save({clean:true});refresh();toast('GitHub-Sicherung getrennt.')}break;
     case 'bk-force':if(confirm('Den Tresor im Repo durch diesen ersetzen? Der alte bleibt in der GitHub-Versionsgeschichte.')){await bkSync(true);refresh()}break;
     case 'bk-pull':if(confirm('Die Daten auf diesem Gerät durch den GitHub-Stand ersetzen?')){try{await restoreVault(await bkRestore(bkCfg()))}catch(x){toast(x.status?bkErrText(x):x.message)}}break;
@@ -447,7 +463,7 @@ document.addEventListener('click',async e=>{
         }catch(x){toast(x.message)}break}
     case 'gh-setup':ghSetup();break;
     case 'gh-upload':ghUpload();break;
-    case 'gh-off':if(confirm('GitHub-Verbindung für Updates entfernen?')){delete META.github;await save({clean:true});refresh()}break;
+    case 'gh-off':if(confirm('GitHub-Verbindung für Updates entfernen? Den Schlüssel kannst du danach auf GitHub löschen.')){delete META.github;await save({clean:true});refresh();toast('App-Update getrennt.')}break;
   }
 },true);
 
