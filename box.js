@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.1.1';
+const APP_VERSION='1.1.2';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -385,6 +385,12 @@ async function doRefresh(){
   else toast(bkCfg()?'Alles aktuell – Sicherung wird abgeglichen.':'Alles aktuell.');
 }
 
+/* ---------- Hinweis: neue Version ---------- */
+function showUpd(){if($('#bxupd'))return;const b=document.createElement('div');b.id='bxupd';b.className='bxupd';b.setAttribute('role','status');
+  b.innerHTML='<span>Neue Version der MySmartBox ist da.</span><button type="button">Aktualisieren</button>';
+  b.querySelector('button').onclick=async()=>{b.querySelector('button').disabled=true;try{hooks.flush&&hooks.flush()}catch{}try{await saving}catch{}location.reload()};
+  document.body.appendChild(b);buzz(8)}
+
 /* ---------- Neu-Auswahl (wie MyBelegBox) ---------- */
 function setFan(on){const f=$('#bxfan'),b=$('#fab');if(!f||!b)return;b.classList.toggle('open',on);b.setAttribute('aria-expanded',on);
   if(on){f.hidden=false;requestAnimationFrame(()=>requestAnimationFrame(()=>f.classList.add('show')));buzz(6)}
@@ -475,7 +481,13 @@ async function start(h){
     else if(KEY&&META.draft){META.draft=null;save({clean:true})}
     else if(!KEY&&!$('#lock').hidden)setTimeout(tryBio,300);
   });
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').then(r=>{swReg=r}).catch(()=>{});
+  if('serviceWorker' in navigator){
+    const hadCtl=!!navigator.serviceWorker.controller;let lastChk=0;
+    const chk=()=>{if(!swReg||Date.now()-lastChk<60000)return;lastChk=Date.now();swReg.update().catch(()=>{})};
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;setTimeout(chk,4000)}).catch(()=>{});
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{if(hadCtl&&!refreshing)showUpd()});
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)chk()});
+  }
   document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#bxfan').hidden)setFan(false);else if(sheetOpen()&&!$('#bxdlg').open)closeSheet()});
 }
 return{start,persist,downloads,securityHtml,backupHtml,updateHtml,openSheet,closeSheet,sheetRefresh,seg,backupOk:()=>!!(bkCfg()&&bkStat.at&&!bkStat.err),flush:()=>saving,lock:()=>showLock(false)};
