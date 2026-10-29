@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://api.github.com data: blob:; frame-ancestors 'none'">
 <meta name="referrer" content="no-referrer">
-<meta name="theme-color" content="#F3F6FB">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F6FB"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0D1220">
 <title>MySmartBox</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -1350,6 +1350,82 @@ body.bxsheet-open{overflow:hidden}
 @media (prefers-reduced-motion:reduce){#bxspanel,#bxsheet .sbg{transition:none!important}}
 #bxsbody .acchd .ai svg{transform:none!important;animation:none!important}
 
+/* ===== Dunkelmodus (folgt der Einstellung des Handys, wie MyGesundBox) ===== */
+@media (prefers-color-scheme:dark){
+.abadge{background:var(--surface)}
+.sbig input{background:var(--surface)}
+.fbar{background:var(--surface)}
+.fpanel{background:var(--surface)}
+.segsw{background:var(--surface)}
+.room .list.rows{background:var(--surface)}
+.room .dev.tile{background:var(--surface)}
+.tile .open{background:var(--surface)}
+.abadge{border-color:var(--line)}
+.bottomnav{background:var(--surface)}
+.btn{background:var(--surface)}
+.banner{background:var(--surface)}
+.empty{background:var(--surface)}
+.list,.applist{background:var(--surface)}
+.addroom input{background:var(--surface)}
+.panel{background:var(--surface)}
+.seg button{background:var(--surface)}
+.gpick .rchip{background:var(--surface)}
+.floors{background:var(--surface)}
+.mapbar{background:var(--surface)}
+.mb-menu{background:var(--surface)}
+.canvas,.canvaswrap{background:var(--surface)}
+.fsfloor,.fsbtn{background:var(--surface)}
+.pin .lbl{background:var(--surface)}
+.pin .head.hasimg{background:var(--surface)}
+.pgrp{background:var(--surface)}
+.glbl{background:var(--surface)}
+.floors{background:var(--surface)}
+.kpis{background:var(--surface)}
+.sbars{background:var(--surface)}
+.pfhint button{background:var(--surface)!important}
+.lbadge.limg{background:var(--surface)}
+.gvoice .voice{background:var(--surface)}
+.acc{background:var(--surface)}
+.room.closed{background:var(--surface)}
+.qrscan{background:var(--surface)}
+.qrrow select{background:var(--surface)}
+.sunb{background:var(--surface)}
+.stk-layer{background:var(--surface)}
+.s3dbar{background:var(--surface)}
+.m3d .head{border-color:var(--line)}
+.lbl3{background:var(--surface)}
+.lampopt{background:var(--surface)}
+.hm-card{background:var(--surface)}
+.hm-fl{background:var(--surface)}
+.hm-act{background:var(--surface)}
+.m3d.dot .head{border-color:var(--line)}
+.stdopt{background:var(--surface)}
+.vsrow textarea{background:var(--surface)}
+.vst{background:var(--surface)}
+.rtico .rti,.rti{background:var(--surface)}
+.rtdevs{background:var(--surface)}
+.tyx ins{background:var(--surface)}
+.ipx select{background:var(--surface)}
+.vsrow input,.vsrow select{background:var(--surface)}
+.iprow.name{background:var(--surface)}
+.hubnote{background:var(--surface)}
+.linkBridgeSel{background:var(--surface)}
+.hm-star{background:var(--surface2)}
+.actsw .sw::after{background:var(--surface)}
+.cmdtabs{background:var(--surface)}
+.cmdsec{background:var(--surface)}
+.cmd{background:var(--surface)}
+.cmd.std{background:var(--surface)}
+.rtdevs2 i{background:var(--surface)}
+.helpbox{background:var(--surface)}
+.rsteps li{background:var(--surface)}
+.ritems i{background:var(--surface)}
+.ntree ul{border-left-color:var(--line)}
+.ntree ul > li::before{border-top-color:var(--line)}
+.nn{background:var(--surface)}
+.accf input{background:var(--surface)}
+
+}
 /* ===== Box-Design: Optik wie MyGesundBox / MyBelegBox, in Blau ===== */
 :root,:root:not([data-theme="light"]),:root[data-theme="dark"]{
   --bg:#F3F6FB; --surface:#FFFFFF; --glass:#FFFFFF; --glass-strong:#FFFFFF; --surface2:#EEF3FA;
@@ -1466,6 +1542,27 @@ body:has(#modal .overlay) #fab,body:has(#rmodal .overlay) #fab{visibility:hidden
 .bxlockbox{border-radius:20px}
 .bxlockico{border-radius:18px}
 
+@media (prefers-color-scheme:dark){
+:root:not([data-theme="light"]),:root[data-theme="dark"]{
+  --bg:#0D1220; --surface:#161D2E; --glass:#161D2E; --glass-strong:#1A2236; --surface2:#1E2740;
+  --ink:#E8EDF7; --muted:#9AA5BC; --line:#2A3550; --line2:#222C43;
+  --accent:#8DB4FF; --accent-ink:#0B1A36; --accent-soft:#1C2C4D; --ok:#4ADE80; --danger:#F87171;
+  --sl:#FF9A5C; --sl-soft:#3A2618; --ew:#4FD1C5; --ew-soft:#123430; --other:#B3A6F2; --other-soft:#28233F;
+  --c4:#FF8DB5; --c4-soft:#3A1E2A; --c5:#F2B84B; --c5-soft:#352914; --c6:#8EC3E3; --c6-soft:#18303D;
+  --c7:#6BD47A; --c7-soft:#173A1E; --c8:#FF7B7B; --c8-soft:#3D1A1A; --c9:#F5CF4A; --c9-soft:#3A3110;
+  --c10:#9EA2FF; --c10-soft:#22244A; --c11:#D2A27F; --c11-soft:#34261C; --c12:#B5C0C7; --c12-soft:#262C30;
+  --c13:#5CC8F0; --c13-soft:#123240; --c14:#F07AE0; --c14-soft:#3A1636;
+  --grid:rgba(141,180,255,.08); color-scheme:dark}
+.toast{background:#E8EDF7;color:#0D1220}
+.bxupd{background:#E8EDF7;color:#0D1220}
+.bxupd button{background:#1F5FBF;color:#fff}
+.hm-hello.night .hm-sun{box-shadow:inset -8px -3px 0 0 #F4E9C8!important}
+.outcard{--oc-bg:#232C42}
+.overlay,#bxsheet .sbg,.bxfan .fs{background:rgba(0,0,0,.55)}
+img.aimg,img.abadge,img.aprev{background:#fff}
+.gpick .rchip[aria-pressed="true"],.rchip[aria-pressed="true"],.fpanel .rchip[data-c][aria-pressed="true"]{color:var(--accent-ink)!important}
+.fpanel .rchip[data-c][aria-pressed="true"]{color:#0D1220!important}
+}
 </style>
 </head>
 <body class="bxlocked">
