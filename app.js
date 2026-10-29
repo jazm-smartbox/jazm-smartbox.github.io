@@ -742,6 +742,7 @@ document.addEventListener("click", e => {
   if (t.dataset.view && t.classList.contains("tab")) { view = t.dataset.view; placingId = ""; render(); try{localStorage.setItem(LS+"-tab",view)}catch(_){} return; }
   const a = t.dataset.act;
   if (a === "close-bg") { if (e.target === t) { draft = null; renderEditor(); } return; }
+  if (a === "ed-x") { draft = null; renderEditor(); return; }
   if (a === "fs-next-floor") { const i = state.floors.findIndex(f => f.id === curFloor); curFloor = state.floors[(i + 1) % state.floors.length].id; try{localStorage.setItem(LS+"-floor",curFloor)}catch(_){} render(); return; }
   if (a === "export-plan") { exportPlan(); return; }
   if (a === "fs") { fs = !fs; planMenu = false; document.body.classList.toggle("fs-open", fs); render(); return; }
@@ -967,9 +968,8 @@ document.addEventListener("click", e => {
     save(); render(); toast(`„${name}“ gelöscht. Die Geräte stehen jetzt unter „Andere App“.`);
   }
   else if (a === "set-app") { readDraftFields(); draft.app = t.dataset.app; renderEditor(); }
-  else if (a === "del-ask") { readDraftFields(); confirmDel = true; renderEditor(); }
   else if (a === "del-no") { readDraftFields(); confirmDel = false; renderEditor(); }
-  else if (a === "del-yes") { const id = draft.id; draft = null; renderEditor(); shrinkOut(document.querySelector(`.rowmain[data-id="${id}"]`)?.closest(".row") || document.querySelector(`.devmain[data-id="${id}"]`)?.closest(".dev"), () => { state.devices = state.devices.filter(d => d.id !== id); save(); render(); toast("Gerät gelöscht"); }); }
+  else if (a === "del-yes" || (a === "del-ask" && (readDraftFields(), confirm(`„${draft.name || "Gerät"}“ wirklich löschen?`)))) { const id = draft.id; draft = null; renderEditor(); shrinkOut(document.querySelector(`.rowmain[data-id="${id}"]`)?.closest(".row") || document.querySelector(`.devmain[data-id="${id}"]`)?.closest(".dev"), () => { state.devices = state.devices.filter(d => d.id !== id); save(); render(); toast("Gerät gelöscht"); }); }
   else if (a === "clear-examples") { state.devices = state.devices.filter(d => !d.example); save(); render(); toast("Beispiele gelöscht"); }
   else if (a === "place") { placingId = t.dataset.id; render(); document.getElementById("canvas")?.scrollIntoView({block:"center",behavior:"smooth"}); }
   else if (a === "remove-plan") {
@@ -2125,11 +2125,29 @@ function homeIndex(){
     .map(([k, l]) => ({k, l, ok: D.filter(d => !MISS[k].test(d)).length}));
   return {pct: Math.round(parts.reduce((a, p) => a + p.ok / n, 0) / parts.length * 100), parts, n: D.length};
 }
+/* Erinnerung an die Datensicherung – gleich in MySmartBox, MyGesundBox und MyBelegBox */
+const DS_ICO_DOWN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>';
+const DS_ICO_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
+function dsRemindHtml(o,attr){
+  const e=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const card=(cls,ico,t,s,go)=>`<button type="button" class="ds-remind${cls}" ${attr}><span class="ds-remind-i">${ico}</span><span class="ds-remind-t"><b>${e(t)}</b><small>${e(s)}</small></span><span class="ds-remind-go">${go}</span></button>`;
+  if(o.ghErr)return card(' crit',DS_ICO_WARN,'GitHub-Sicherung: Problem',o.ghErr,'Ansehen');
+  if(!o.own||o.ghOk)return '';
+  const d=o.days,dirty=o.dirty||0;
+  if(d!=null&&d<=14&&dirty<5)return '';
+  return card('',DS_ICO_DOWN,d==null?'Noch keine Datensicherung':dirty>=5?dirty+' Änderungen seit der letzten Datensicherung':'Letzte Datensicherung vor '+d+' Tagen',
+    'Ohne Sicherung sind bei Handyverlust oder gelöschten Browserdaten alle Daten weg.','Sichern');
+}
+function homeRemind(){
+  if (readOnly) return "";
+  const b = BOX.bkInfo(), ts = [b.last ? new Date(b.last + "T00:00").getTime() : 0, state.lastBackup ? new Date(state.lastBackup).getTime() : 0].filter(x => x && !isNaN(x)), last = ts.length ? Math.max(...ts) : 0;
+  return dsRemindHtml({ghErr: b.ghErr, ghOk: b.ghOk, own: state.devices.length > 0, days: last ? Math.floor((Date.now() - last) / 864e5) : null, dirty: b.dirty}, 'data-act="home-backup"');
+}
 function renderHome(){
   const D = state.devices.filter(d => !d.inactive), nInact = state.devices.length - D.length, hr = new Date().getHours(), {rise, set} = sunTimes(), nowH = nowHour(), day = nowH >= rise && nowH <= set;
   const greet = hr < 5 ? "Gute Nacht" : hr < 11 ? "Guten Morgen" : hr < 18 ? "Guten Tag" : hr < 22 ? "Guten Abend" : "Gute Nacht";
   const lamps = D.filter(isLamp).length;
-  let h = exampleBanner();
+  let h = exampleBanner() + homeRemind();
   h += `<section class="hm-hello ${day ? "day" : "night"}"><span class="hm-sun" aria-hidden="true"></span>${day ? "" : [[62, 18], [70, 44], [80, 26], [55, 34], [88, 52]].map(([x, y], i) => `<i class="hm-star" style="left:${x}%;top:${y}%;--i:${i}"></i>`).join("")}<h2>${greet}</h2><p>Sonnenaufgang ${fmtH(rise)} · Sonnenuntergang ${fmtH(set)}</p><p class="hm-sub">${D.length} ${D.length === 1 ? "Gerät" : "Geräte"} in ${new Set(D.map(d => d.room).filter(Boolean)).size} Räumen${nInact ? ` · ${nInact} inaktiv` : ""}${!day && lamps ? ` · ${lamps} Lampen leuchten im Grundriss` : ""}</p></section>`;
   const I = homeIndex(), C = 97.4, dash = (I.pct / 100 * C).toFixed(1);
   h += `<button class="hm-card hm-score" data-act="home-index" aria-expanded="${homeIdx}"><svg class="hm-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--line)" stroke-width="5"/><circle cx="18" cy="18" r="15.5" fill="none" stroke="#1F5FAF" stroke-width="5" stroke-dasharray="${dash} ${C}" transform="rotate(-90 18 18)"/><text x="18" y="21.3" text-anchor="middle" font-size="8.5" font-weight="800" fill="currentColor">${I.pct}%</text></svg>
@@ -2169,7 +2187,6 @@ function renderHome(){
   { const ck = routineChecks().filter(c => c.lvl !== "info"); if (ck.length) todos.unshift({k: "_rt", c: "#C8361D", n: ck.length}); }
   { const ty = typoFindings().length; if (ty && !readOnly) todos.unshift({k: "_typo", c: "#D08A1E", n: ty}); }
   { const am = readOnly ? [] : accountsMissing(); if (am.length) todos.push({k: "_acc", c: "#8A857C", n: am.length}); }
-  { const bd = BOX.backupOk() ? 0 : backupAge(); if (!readOnly && (bd == null || bd > 30)) todos.unshift({k: "_bk", c: bd == null ? "#C8361D" : "#D08A1E", n: bd == null ? "!" : bd}); }
   h += `<section class="hm-card"><p class="hm-lbl">Zu erledigen</p>${todos.length ? `<div class="hm-todo">${todos.map(t => t.k === "_bk" ? `<button data-act="home-backup"><span class="hm-pill" style="background:${t.c}">${t.n === "!" ? "!" : t.n + " T"}</span><span class="hm-t">${t.n === "!" ? "Noch keine Datensicherung" : `Letzte Datensicherung vor ${t.n} Tagen`}</span><em>sichern</em></button>` : t.k === "_typo" ? `<button data-act="typo-open"><span class="hm-pill" style="background:${t.c}">${t.n}</span><span class="hm-t">${t.n === 1 ? "möglicher Tippfehler" : "mögliche Tippfehler"}</span><em>prüfen</em></button>` : t.k === "_acc" ? `<button data-act="home-acc" data-sec="Konten"><span class="hm-pill" style="background:${t.c}">${t.n}</span><span class="hm-t">${t.n === 1 ? "App" : "Apps"} ohne Konto-Eintrag</span><em>eintragen</em></button>` : t.k === "_rt" ? `<button data-act="home-rtcheck"><span class="hm-pill" style="background:${t.c}">${t.n}</span><span class="hm-t">${t.n === 1 ? "Routine prüfen" : "Routinen-Konflikte prüfen"}</span><em>ansehen</em></button>` : `<button data-act="home-miss" data-k="${t.k}"><span class="hm-pill" style="background:${t.c}">${t.n}</span><span class="hm-t">${t.n === 1 ? "Gerät" : "Geräte"} ${esc(MISS[t.k].label)}</span><em>${t.k === "ip" ? "optional" : t.k === "help" ? "eintragen" : "ansehen"}</em></button>`).join("")}</div>` : `<p class="hm-done">Alles erledigt. Jedes Gerät ist vollständig eingetragen.</p>`}</section>`;
   const rc = roomsInUse().map(r => [r, D.filter(d => d.room === r).length]).filter(x => x[1]).sort((a, b) => b[1] - a[1]).slice(0, 3);
   if (rc.length) h += `<section class="hm-card"><p class="hm-lbl">Am meisten los</p>${rc.map(([r, c]) => `<button class="hm-prow" data-act="home-room" data-room="${esc(r)}"><span>${esc(r)}</span><em>${c}</em><span class="hm-bar"><i style="width:${c / rc[0][1] * 100}%;background:#1F5FAF"></i></span></button>`).join("")}</section>`;
@@ -3054,13 +3071,41 @@ BOX.start({
   go(v){ view = v; placingId = ""; render(); window.scrollTo(0, 0); },
   sheetHtml(){ return ready ? renderSheet() : ""; },
   decorate(root){ makeAccordions(root); },
-  search(){ view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 60); },
+  search(){ BOX.openSheet("search"); },
+  searchRes(raw){
+    const q = String(raw || "").trim().toLowerCase();
+    if (!q) return `<p class="ds-qhint">${state.devices.length} Geräte und ${state.routines.length} Routinen durchsuchbar – auch Räume, Notizen, IP-Adressen, Gruppen und Sprachbefehle.</p>`;
+    const row = (attrs, ico, t, sub) => `<button type="button" class="ds-qrow" ${attrs}><span class="ds-qi">${ico}</span><span class="ds-qt"><b>${esc(t)}</b><small>${esc(sub)}</small></span></button>`;
+    const D = state.devices.filter(d => [d.name,d.note,d.ip,d.mac,d.room,circuitOf(d)?"F"+circuitOf(d):"",linkById(d.link)?.name,(TYPES[d.type]||[])[0],appById(d.app)?.name,...allVoice(d),...devGroups(d).map(grpName)].join(" ").toLowerCase().includes(q));
+    const R = state.routines.filter(r => [r.name, trigText(r), r.note].join(" ").toLowerCase().includes(q));
+    let h = "";
+    if (D.length) h += `<div class="ds-lbl">Geräte</div><div class="ds-qlist">${D.slice(0, 30).map(d => row(`data-act="edit" data-id="${esc(d.id)}"`, icon(d.type), d.name, [d.room || "Ohne Raum", appById(d.app)?.name].filter(Boolean).join(" · "))).join("")}</div>`;
+    if (R.length) h += `<div class="ds-lbl">Routinen</div><div class="ds-qlist">${R.slice(0, 30).map(r => row(`data-act="open-routine" data-r="${esc(r.id)}"`, RT_ICONS[r.trigger?.kind] || RT_ICONS.manual, r.name, trigText(r))).join("")}</div>`;
+    return h || '<p class="ds-qhint">Nichts gefunden.</p>';
+  },
   shortcut(k){
     if (k.startsWith("ref:")) { const id = k.slice(4), d = state.devices.find(x => x.id === id); if (d) { view = "list"; render(); openEditor(id); } else toast("Dieses Gerät gibt es in der MySmartBox nicht mehr."); return; }
     if (k === "geraet") openEditor(null);
-    else if (k === "suche") { view = "list"; placingId = ""; render(); window.scrollTo(0, 0); setTimeout(() => document.getElementById("q")?.focus(), 80); }
+    else if (k === "suche") BOX.openSheet("search");
     else if (k === "plan") { view = "plan"; stack3d = false; placingId = ""; render(); window.scrollTo(0, 0); }
     else if (k === "strom") { view = "plan"; stack3d = false; planMenu = true; render(); window.scrollTo(0, 0); const sel = document.getElementById("outSel"); if (sel) sel.focus(); }
   },
   create(k){ if (k === "routine") openRoutine(null); else if (k === "room") { view = "rooms"; accOpen = {...accOpen, "Räume": true}; render(); setTimeout(() => { const i = document.getElementById("newRoom"); i?.scrollIntoView({block: "center"}); i?.focus(); }, 80); } else openEditor(null); }
 });
+
+/* Blätter (Gerät, Routine, Gruppe, Namen prüfen, Gäste-WLAN): Griff oben und ✕ rechts neben dem Titel – wie MyBelegBox / MyGesundBox */
+(() => {
+  const X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  const closeAct = bg => bg === "close-bg" ? "ed-x" : bg.replace(/-bg$/, "");
+  const deco = p => {
+    if (p.dataset.dshd) return; p.dataset.dshd = "1";
+    const ov = p.closest(".overlay"), bg = ov && ov.dataset.act; if (!bg) return;
+    const h = p.querySelector("h2"); if (!h) return;
+    const btn = `<button type="button" class="bxico ds-pclose" data-act="${closeAct(bg)}" aria-label="Schließen" title="Schließen">${X}</button>`;
+    if (h.parentElement.classList.contains("edhd")) { h.parentElement.insertAdjacentHTML("beforeend", btn); h.parentElement.classList.add("ds-phd"); }
+    else { const w = document.createElement("div"); w.className = "ds-phd"; h.replaceWith(w); w.appendChild(h); w.insertAdjacentHTML("beforeend", btn); }
+    p.insertAdjacentHTML("afterbegin", '<div class="ds-grab"></div>');
+  };
+  new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches(".panel")) deco(n); n.querySelectorAll && n.querySelectorAll(".panel").forEach(deco); } })
+    .observe(document.body, {childList: true, subtree: true});
+})();

@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.4.1';
+const APP_VERSION='1.4.3';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -115,7 +115,7 @@ function showLock(auto){
   $('#restoreBox').hidden=has;$('#lgh').hidden=true;$('#lgh_msg').textContent='';
   $('#pw2').hidden=has;$('#pw2').required=!has;
   $('#lockGo').textContent=has?'Entsperren':(PENDING?'Übernehmen & verschlüsseln':'MySmartBox anlegen');
-  $('#lockHint').textContent=has?'Deine Smart-Home-Daten, verschlüsselt auf diesem Gerät.':'Lege ein Passwort fest (mind. 8 Zeichen). Ohne Passwort sind die Daten nicht wiederherstellbar.';
+  $('#lockHint').textContent=has?'Deine Smart-Home-Daten, verschlüsselt auf diesem Gerät.':'Lege ein Passwort fest (mind. 10 Zeichen). Ohne Passwort sind die Daten nicht wiederherstellbar.';
   $('#pw').autocomplete=has?'current-password':'new-password';$('#pw').value='';$('#pw2').value='';$('#lockErr').textContent='';
   impInfo();
   $('#bioBtn').hidden=!(has&&lsGet(BKEY)&&bioSupported());
@@ -362,22 +362,36 @@ const SHEET_META={
   'Datensicherung':[SVG('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>'),()=>(bkCfg()?(bkStat.err?'GitHub ⚠️ Problem':'GitHub an'):'GitHub aus')+' · '+(META.lastFile?'Datei '+new Date(META.lastFile+'T00:00').toLocaleDateString('de-DE'):'keine Datei')],
   'App-Update':[SVG('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'),()=>'Version '+APP_VERSION+' · '+(META.github?'GitHub verbunden':'nicht verbunden')],
   'Darstellung':[SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),()=>'Muster, Animationen, Vibration'],
-  'Drucken & Exportieren':[SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>'),()=>'Geräteliste als PDF, Tabelle, QR-Aufkleber'],
+  'Drucken & Exportieren':[SVG('<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>'),()=>'PDF, Tabelle, QR-Aufkleber'],
   'Änderungsverlauf':[SVG('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>'),()=>'Was wann geändert wurde']};
 const sheetOpen=()=>!$('#bxsheet').hidden;
+/* Blatt im Modus „Daten & Sicherheit“ oder „Suchen“ (Suche wie in MyBelegBox / MyGesundBox) */
+let SHMODE='menu';
+function searchFill(b){
+  let q=b.querySelector('#bxq');
+  if(!q){b.innerHTML=`<label class="ds-srch"><span class="sr">Suchbegriff</span><input id="bxq" type="search" placeholder="Gerät, Raum, Notiz oder Befehl …" autocomplete="off" enterkeyhint="search"></label><div class="ds-qres" id="bxqres"></div>`;
+    q=b.querySelector('#bxq');q.addEventListener('input',()=>{$('#bxqres').innerHTML=hooks.searchRes?hooks.searchRes(q.value):''})}
+  $('#bxqres').innerHTML=hooks.searchRes?hooks.searchRes(q.value):'';
+}
 function sheetFill(){
-  const b=$('#bxsbody');if(!b)return;b.innerHTML=hooks.sheetHtml?hooks.sheetHtml():'';
+  const b=$('#bxsbody');if(!b)return;
+  const srch=SHMODE==='search';$('#bxsheetH').textContent=srch?'Suchen':'Daten & Sicherheit';
+  const si=document.querySelector('#bxspanel .sintro');if(si)si.hidden=srch;$('#bxver2').hidden=srch;
+  if(srch){searchFill(b);return}
+  b.innerHTML=hooks.sheetHtml?hooks.sheetHtml():'';
   try{hooks.decorate&&hooks.decorate(b)}catch{}
   b.querySelectorAll('.acchd').forEach(h=>{const m=SHEET_META[h.dataset.k];if(!m)return;const t=h.querySelector('span');
     h.insertAdjacentHTML('afterbegin',`<span class="ai">${m[0]}</span>`);if(t)t.outerHTML=`<span class="at">${esc(h.dataset.k)}<small>${esc(m[1]())}</small></span>`});
   $('#bxver2').textContent='MySmartBox · Version '+APP_VERSION;
 }
-function openSheet(){setFan(false);const sh=$('#bxsheet');sheetFill();sh.hidden=false;$('#bxspanel').scrollTop=0;document.body.classList.add('bxsheet-open');
+function openSheet(mode){const nm=mode==='search'?'search':'menu';if(nm!==SHMODE){SHMODE=nm;$('#bxsbody').innerHTML=''}setFan(false);const sh=$('#bxsheet');sheetFill();if(SHMODE==='search')setTimeout(()=>{const q=$('#bxq');if(q)q.focus()},matchMedia('(prefers-reduced-motion: reduce)').matches?0:320);sh.hidden=false;$('#bxspanel').scrollTop=0;document.body.classList.add('bxsheet-open');
   requestAnimationFrame(()=>requestAnimationFrame(()=>sh.classList.add('show')));buzz(6)}
 function closeSheet(){const sh=$('#bxsheet');if(!sh||sh.hidden)return;sh.classList.remove('show');document.body.classList.remove('bxsheet-open');
   const p=$('#bxspanel');p.style.transform='';setTimeout(()=>{if(!sh.classList.contains('show'))sh.hidden=true},matchMedia('(prefers-reduced-motion: reduce)').matches?0:300)}
 function sheetRefresh(){if(!sheetOpen())return;const p=$('#bxspanel'),y=p.scrollTop;sheetFill();p.scrollTop=y}
 const seg=v=>`<div class="bxseg" role="tablist"><button type="button" role="tab" data-box="seg" data-v="home" aria-selected="${v==='home'}">Übersicht</button><button type="button" role="tab" data-box="seg" data-v="stats" aria-selected="${v==='stats'}">Statistik</button></div>`;
+/* Suchtreffer antippen: Blatt schließen, dann Gerät bzw. Routine öffnen */
+document.addEventListener('click',e=>{if(SHMODE==='search'&&e.target.closest('#bxsbody .ds-qrow'))closeSheet()},true);
 /* Blatt nach unten wegwischen */
 (()=>{let y0=0,dy=0,on=false;const p=()=>$('#bxspanel');
   document.addEventListener('touchstart',e=>{const pn=p();on=false;if(!pn||!sheetOpen()||!pn.contains(e.target)||e.touches.length!==1)return;
@@ -434,17 +448,17 @@ document.addEventListener('click',async e=>{
     case 'menu':setFan(false);sheetOpen()?closeSheet():openSheet();break;
     case 'sheet-x':closeSheet();break;
     case 'seg':hooks.go&&hooks.go(b.dataset.v);buzz(6);break;
-    case 'search':setFan(false);closeSheet();hooks.search&&hooks.search();break;
+    case 'search':setFan(false);openSheet('search');break;
     case 'fan':setFan(!$('#fab').classList.contains('open'));break;
     case 'fanbg':setFan(false);break;
     case 'new':setFan(false);closeSheet();hooks.create&&hooks.create(b.dataset.k);break;
     case 'reload':location.reload();break;
     case 'bio-on':form('Fingerabdruck einrichten',[{k:'pw',l:'Zur Bestätigung dein Passwort',t:'password',req:true}],async v=>{
-        try{await checkPw(v.pw)}catch{return ferr('Passwort falsch.')}setTimeout(()=>enableBio(v.pw),50)},
+        try{await checkPw(v.pw)}catch{return ferr('Das Passwort ist falsch.')}setTimeout(()=>enableBio(v.pw),50)},
         {ok:'Weiter',html:'<p class="bxnote">Danach fragt dein Handy nach dem Fingerabdruck. Als Speicherort unbedingt den Google Passwortmanager wählen.</p>'});break;
     case 'bio-off':if(confirm('Fingerabdruck-Entsperrung deaktivieren?')){lsDel(BKEY);refresh();toast('Fingerabdruck deaktiviert. Den Passkey kannst du im Google Passwortmanager löschen.')}break;
-    case 'pw':form('Passwort ändern',[{k:'old',l:'Aktuelles Passwort',t:'password',req:true},{k:'n1',l:'Neues Passwort (mind. 8 Zeichen)',t:'password',req:true},{k:'n2',l:'Neues Passwort wiederholen',t:'password',req:true}],async v=>{
-        if(v.n1.length<8)return ferr('Das neue Passwort braucht mindestens 8 Zeichen.');if(v.n1!==v.n2)return ferr('Die neuen Passwörter stimmen nicht überein.');
+    case 'pw':form('Passwort ändern',[{k:'old',l:'Aktuelles Passwort',t:'password',req:true},{k:'n1',l:'Neues Passwort (mind. 10 Zeichen)',t:'password',req:true},{k:'n2',l:'Neues Passwort wiederholen',t:'password',req:true}],async v=>{
+        if(v.n1.length<10)return ferr('Das neue Passwort braucht mindestens 10 Zeichen.');if(v.n1!==v.n2)return ferr('Die neuen Passwörter stimmen nicht überein.');
         try{await checkPw(v.old)}catch{return ferr('Das aktuelle Passwort ist falsch.')}
         SALT=rnd(16);KEY=await derive(v.n1,SALT);await save({clean:true});await saving;
         if(lsGet(BKEY)){lsDel(BKEY);toast('Passwort geändert. Bitte den Fingerabdruck neu einrichten.')}else toast('Passwort geändert ✓');refresh()},{ok:'Passwort ändern'});break;
@@ -477,15 +491,15 @@ async function start(h){
     const pw=$('#pw').value,btn=$('#lockGo');$('#lockErr').textContent='';
     const stored=vaultJson;
     if(!stored){
-      if(pw.length<8){$('#lockErr').textContent='Mindestens 8 Zeichen.';return}
-      if(pw!==$('#pw2').value){$('#lockErr').textContent='Passwörter stimmen nicht überein.';return}
+      if(pw.length<10){$("#lockErr").textContent="Das Passwort braucht mindestens 10 Zeichen.";return}
+      if(pw!==$('#pw2').value){$('#lockErr').textContent='Die Passwörter stimmen nicht überein.';return}
     }
     btn.disabled=true;btn.textContent='Bitte warten …';
     try{
       if(!stored){SALT=rnd(16);KEY=await derive(pw,SALT);VID=b64(rnd(12));STATE=PENDING?PENDING.data:{};META={};PENDING=null;await save({clean:true});await saving}
       await unlockWith(pw);
       if(!stored&&bioSupported())setTimeout(()=>{if(confirm('Möchtest du künftig per Fingerabdruck entsperren?'))enableBio(pw)},500);
-    }catch(err){KEY=null;$('#lockErr').textContent=stored?'Falsches Passwort.':'Fehler: '+err.message}
+    }catch(err){KEY=null;$('#lockErr').textContent=stored?'Das Passwort ist falsch.':'Fehler: '+err.message}
     finally{btn.disabled=false;btn.textContent=vaultJson?'Entsperren':(PENDING?'Übernehmen & verschlüsseln':'MySmartBox anlegen')}
   };
   $('#bioBtn').onclick=tryBio;
@@ -517,5 +531,5 @@ async function start(h){
   }
   document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#bxfan').hidden)setFan(false);else if(sheetOpen()&&!$('#bxdlg').open)closeSheet()});
 }
-return{start,persist,downloads,securityHtml,backupHtml,updateHtml,openSheet,closeSheet,sheetRefresh,seg,backupOk:()=>!!(bkCfg()&&bkStat.at&&!bkStat.err),flush:()=>saving,lock:()=>showLock(false)};
+return{start,persist,downloads,securityHtml,backupHtml,updateHtml,openSheet,closeSheet,sheetRefresh,seg,backupOk:()=>!!(bkCfg()&&bkStat.at&&!bkStat.err),bkInfo:()=>({ghErr:bkCfg()?(bkStat.err||''):'',ghOk:!!(bkCfg()&&bkStat.at&&!bkStat.err),last:META.lastFile||null,dirty:META.dirty||0}),flush:()=>saving,lock:()=>showLock(false)};
 })();
