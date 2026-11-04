@@ -428,7 +428,7 @@ function renderRoomsRaw(){
     ${downloads?`<div class="ds-lbl">Listen</div><div class="ds-acts"><button type="button" class="ds-btn pri" data-act="export-pdf">Geräteliste als PDF</button><button type="button" class="ds-btn" data-act="export-csv">Als Tabelle (CSV)</button><button type="button" class="ds-btn" data-act="export-guide">Hausanleitung für Gäste (PDF)</button><button type="button" class="ds-btn" data-act="export-cheat">Spickzettel-Poster (PDF)</button></div>
     <div class="ds-lbl sep">QR-Aufkleber</div><div class="ds-acts qrrow"><select id="qrRoom" class="ds-sel" aria-label="Aufkleber für Raum"><option value="">Alle Räume</option>${roomsInUse().map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join("")}</select><button type="button" class="ds-btn" data-act="export-qr">QR-Aufkleber (PDF)</button></div>`:`<p class="ds-hint">Speichern als Datei ist hier nicht möglich.</p>`}
   <p class="ds-hint" style="margin-top:10px">Die PDF enthält alle Geräte nach Etage und Raum mit App, Verbindung, Art, Gruppen, Sicherung, Sprachbefehlen, Notiz und IP, dazu die Gruppen mit ihren Sprachbefehlen. Du kannst sie danach am Handy drucken oder teilen. Die CSV öffnest du in Excel.</p>
-  <p class="ds-hint">QR-Aufkleber: 3 × 8 Etiketten à 70 × 37 mm pro A4-Bogen. Klebe sie aufs Gerät. Mit dem QR-Knopf neben der Suche fotografierst du einen Aufkleber und landest direkt beim Gerät.</p>`;
+  <p class="ds-hint">QR-Aufkleber: 5 × 16 Etiketten à 35,6 × 16,9 mm pro A4-Bogen (80 Stück). Beim Drucken Skalierung 100 % wählen. Klebe sie aufs Gerät. Mit dem QR-Knopf neben der Suche fotografierst du einen Aufkleber und landest direkt beim Gerät.</p>`;
   h += `<h2 class="sec">Datensicherung</h2>${BOX.backupHtml()}
     <div class="ds-lbl sep">Lesbare Datei (ohne Verschlüsselung)</div>
     <p class="ds-hint">Enthält alle Geräte, Räume, Apps, Gruppen, Etagen und Bilder – lesbar für jeden, der die Datei hat. Fehlen Grundrisse oder App-Symbole beim Einlesen in der App, werden sie aus der Datei wiederhergestellt.${downloads?"":" Speichern als Datei ist hier nicht möglich."}</p>
@@ -1793,37 +1793,41 @@ async function exportQrPdf(list){
     for (const ap of state.apps) { try { icons[ap.id] = await appIconPng(ap, 64); } catch (_) {} }
     const badges = {}, jazm = await jazmLogoImg();
     for (const ap of state.apps) { try { badges[ap.id] = await qrBadge(ap, jazm); } catch (_) {} }
-    const W = 70, H = 37, COLS = 3, ROWS = 8, top = (297 - ROWS * H) / 2;
+    // Etikettenbogen 5 × 16 à 35,6 × 16,9 mm (80 pro A4), ohne Zwischenräume, mittig
+    const W = 35.6, H = 16.9, COLS = 5, ROWS = 16, left = (210 - COLS * W) / 2, top = (297 - ROWS * H) / 2;
     const sorted = [...list].sort((a, b) => (a.room || "").localeCompare(b.room || "", "de") || a.name.localeCompare(b.name, "de", {numeric: true}));
     sorted.forEach((d, i) => {
       const k = i % (COLS * ROWS); if (i && !k) doc.addPage();
-      const x = (k % COLS) * W, y = top + Math.floor(k / COLS) * H;
-      doc.setDrawColor(225); doc.setLineWidth(.1); doc.rect(x + .6, y + .6, W - 1.2, H - 1.2);
-      // Fehlerkorrektur H: bis 30 % des Codes dürfen verdeckt sein, die Mitte trägt die Logos
+      const x = left + (k % COLS) * W, y = top + Math.floor(k / COLS) * H;
+      doc.setDrawColor(232); doc.setLineWidth(.08); doc.rect(x + .3, y + .3, W - .6, H - .6);
+      // Fehlerkorrektur H: bis 30 % des Codes dürfen verdeckt sein, die Mitte trägt das Logo
       const q = window.qrcode(0, "H"); q.addData(devLink(d)); q.make();
-      const n = q.getModuleCount(), S = 29, cell = S / (n + 2), qx = x + 3, qy = y + (H - S) / 2;
-      const bm = Math.round(n * .3) | 1, b0 = Math.floor((n - bm) / 2), inB = (r, c) => r >= b0 && r < b0 + bm && c >= b0 && c < b0 + bm;
+      const n = q.getModuleCount(), S = 14.6, cell = S / (n + 2), qx = x + 1, qy = y + (H - S) / 2;
+      const bm = Math.round(n * .26) | 1, b0 = Math.floor((n - bm) / 2), inB = (r, c) => r >= b0 && r < b0 + bm && c >= b0 && c < b0 + bm;
       doc.setFillColor(43, 42, 39);
       for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c) && !inB(r, c)) doc.rect(qx + (c + 1) * cell, qy + (r + 1) * cell, cell + .02, cell + .02, "F");
-      if (badges[d.app]) try { doc.addImage(badges[d.app], "PNG", qx + (b0 + 1) * cell + cell * .3, qy + (b0 + 1) * cell + cell * .3, bm * cell - cell * .6, bm * cell - cell * .6); } catch (_) {}
-      const tx = x + 34, tw = W - 37;
-      if (icons[d.app]) try { doc.addImage(icons[d.app], "PNG", tx, y + 4.5, 5.5, 5.5); } catch (_) {}
-      doc.setTextColor(120); doc.setFont("helvetica", "normal"); doc.setFontSize(6.5);
-      doc.text(pdfText(appById(d.app).name), tx + 7, y + 8.4, {maxWidth: tw - 7});
-      doc.setTextColor(30); doc.setFont("helvetica", "bold"); doc.setFontSize(9.5);
-      const nm = doc.splitTextToSize(pdfText(d.name), tw).slice(0, 2);
-      doc.text(nm, tx, y + 15);
-      let ly = y + 15 + nm.length * 4;
-      doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(90);
+      if (badges[d.app]) try { doc.addImage(badges[d.app], "PNG", qx + (b0 + 1) * cell + cell * .25, qy + (b0 + 1) * cell + cell * .25, bm * cell - cell * .5, bm * cell - cell * .5); } catch (_) {}
+      const tx = x + 16, tw = W - 17.2;
+      if (icons[d.app]) try { doc.addImage(icons[d.app], "PNG", tx, y + 1.5, 2.6, 2.6); } catch (_) {}
+      doc.setTextColor(120); doc.setFont("helvetica", "normal"); doc.setFontSize(4.6);
+      doc.text(doc.splitTextToSize(pdfText(appById(d.app).name), tw - 3.2)[0] || "", tx + 3.2, y + 3.4);
+      doc.setTextColor(30); doc.setFont("helvetica", "bold");
+      // lange Einzelwörter (z. B. „Heizkörperthermostat“) passen durch kleinere Schrift aufs Etikett
+      let fz = 6.4; const words = pdfText(d.name).split(/\s+/);
+      for (doc.setFontSize(fz); fz > 4.6 && Math.max(...words.map(w => doc.getTextWidth(w))) > tw; ) doc.setFontSize(fz -= .2);
+      const nm = doc.splitTextToSize(pdfText(d.name), tw).slice(0, 2), lh = fz * .39;
+      doc.text(nm, tx, y + 7, {lineHeightFactor: 1.1});
+      let ly = y + 7 + nm.length * lh + .3;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(4.6); doc.setTextColor(90);
       const fl = state.floors.length > 1 && typeof d.x === "number" ? (state.floors.find(f => f.id === floorOf(d)) || {}).name : "";
       for (const line of [[d.room, fl].filter(Boolean).join(" · "), circLabel(circuitOf(d)), linkById(d.link)?.name || ""].filter(Boolean)) {
-        if (ly > y + H - 3) break;
-        doc.text(doc.splitTextToSize(pdfText(line), tw)[0], tx, ly); ly += 3.4;
+        if (ly > y + H - 1.2) break;
+        doc.text(doc.splitTextToSize(pdfText(line), tw)[0], tx, ly); ly += 1.9;
       }
     });
     const now = new Date();
     await downloads.save({filename: list.length === 1 ? `QR-Aufkleber ${list[0].name}.pdf` : `QR-Aufkleber ${now.toISOString().slice(0, 10)}.pdf`, data: doc.output("blob")});
-    toast("Aufkleber gespeichert. Am besten auf Etiketten 70 × 37 mm drucken, Skalierung 100 %.");
+    toast("Aufkleber gespeichert. Drucken auf Etiketten 35,6 × 16,9 mm (5 × 16 pro Bogen), Skalierung 100 % bzw. „Tatsächliche Größe“.");
   } catch (e) {
     if (e && e.code === "declined") return;
     toast("Die Aufkleber konnten nicht erstellt werden" + (e && e.message ? ` (${String(e.message).slice(0, 80)})` : "") + ".");
