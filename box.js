@@ -1,7 +1,7 @@
 /* MySmartBox – Sicherheitskern wie in MyBelegBox und MyGesundBox:
    Tresor (AES-256, Schlüssel aus dem Passwort), Sperre, Fingerabdruck, GitHub-Sicherung, App-Update per Zip. */
 'use strict';
-const APP_VERSION='1.5.3';
+const APP_VERSION='1.5.4';
 const BOX=(()=>{
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -61,7 +61,7 @@ function save(opt){
 function persist(state){STATE=JSON.parse(JSON.stringify(state));return save()}
 
 /* ---------- Fingerabdruck (Passkey + PRF, Google Passwortmanager) ---------- */
-const bioSupported=()=>!!(window.PublicKeyCredential&&navigator.credentials&&window.isSecureContext);
+const bioSupported=()=>!window.MBX_EMBED&&!!(window.PublicKeyCredential&&navigator.credentials&&window.isSecureContext);
 async function keyFromPrf(r,prfSalt){const base=await crypto.subtle.importKey('raw',r,'HKDF',false,['deriveKey']);
   return crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt:prfSalt,info:te.encode('mysmartbox-bio-v1')},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
 async function prfKey(credId,prfSalt){
@@ -148,10 +148,10 @@ async function tryBio(){
   catch(err){KEY=null;$('#lockErr').textContent=err.message==='nopw'?'Fingerabdruck passt nicht mehr zum Passwort – bitte mit Passwort entsperren und neu einrichten.':(err.name==='NotAllowedError'?'Abgebrochen. Du kannst auch das Passwort nutzen.':'Fingerabdruck fehlgeschlagen – bitte Passwort nutzen.')}
   finally{btn.disabled=false;bioBusy=false}
 }
-function resetIdle(){clearTimeout(idleT);if(KEY)idleT=setTimeout(()=>showLock(false),5*60*1000)}
+function resetIdle(){if(window.MBX_EMBED)return;clearTimeout(idleT);if(KEY)idleT=setTimeout(()=>showLock(false),5*60*1000)}
 
 /* ---------- Datei-Sicherung (verschlüsselt) und Übernahme aus der bisherigen MySmartBox ---------- */
-async function deliver(name,blob,share){
+async function deliver(name,blob,share){if(window.MBX_CAP){window.MBX_CAP(name,blob);return true}
   const file=new File([blob],name,{type:blob.type||'application/octet-stream'});
   if(share&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:name});return true}catch(e){if(e.name==='AbortError')return false}}
   const a=document.createElement('a'),u=URL.createObjectURL(blob);a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);return true;
@@ -508,7 +508,7 @@ async function start(h){
     }catch(err){KEY=null;$('#lockErr').textContent=stored?'Das Passwort ist falsch.':'Fehler: '+err.message}
     finally{btn.disabled=false;btn.textContent=vaultJson?'Entsperren':(PENDING?'Übernehmen & verschlüsseln':'MySmartBox anlegen')}
   };
-  $('#bioBtn').onclick=tryBio;
+  $('#bioBtn').onclick=tryBio;window.MBX_BOOTED=true;
   $('#lfile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
     try{const r=await readAnyBackup(f);if(r.kind==='vault')await restoreVault(r.vault);else{PENDING={data:r.data,when:r.when};impInfo();$('#pw').focus()}}
     catch(x){$('#lockErr').textContent=x.message}});
@@ -524,11 +524,11 @@ async function start(h){
       if(KEY){try{const dr=hooks.stash&&hooks.stash();if(dr){META.draft=dr;save({clean:true})}}catch{}}
       if(bkTimer&&bkPending)bkSync();return}
     if(Date.now()<pickingUntil){pickingUntil=0;return}
-    if(KEY&&hiddenAt&&Date.now()-hiddenAt>60000)showLock(true);
+    if(!window.MBX_EMBED&&KEY&&hiddenAt&&Date.now()-hiddenAt>60000)showLock(true);
     else if(KEY&&META.draft){META.draft=null;save({clean:true})}
     else if(!KEY&&!$('#lock').hidden)setTimeout(tryBio,300);
   });
-  if('serviceWorker' in navigator){
+  if('serviceWorker' in navigator&&!window.MBX_EMBED){
     const hadCtl=!!navigator.serviceWorker.controller;let lastChk=0;
     const chk=()=>{if(!swReg||Date.now()-lastChk<60000)return;lastChk=Date.now();swReg.update().catch(()=>{})};
     navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;setTimeout(chk,4000)}).catch(()=>{});
@@ -537,5 +537,9 @@ async function start(h){
   }
   document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!$('#bxfan').hidden)setFan(false);else if(sheetOpen()&&!$('#bxdlg').open)closeSheet()});
 }
+/* MyBox: Kern für die Rahmen-App bereitstellen (nur eingebettet) */
+if(window.MBX_EMBED)window.__mbxS={get META(){return META},get saving(){return saving},get bkStat(){return bkStat},save,bkQueue,bkSync,setBk,checkPw,exportBackup,restoreVault,readAnyBackup,bkRestore,showLock,closeSheet,
+  changePw:async(o,n)=>{await checkPw(o);SALT=rnd(16);KEY=await derive(n,SALT);await save({clean:true});await saving},
+  newVid:()=>{VID=b64(rnd(12));return save({clean:true})}};
 return{start,persist,downloads,securityHtml,backupHtml,updateHtml,openSheet,closeSheet,sheetRefresh,seg,backupOk:()=>!!(bkCfg()&&bkStat.at&&!bkStat.err),bkInfo:()=>({ghErr:bkCfg()?(bkStat.err||''):'',ghOk:!!(bkCfg()&&bkStat.at&&!bkStat.err),last:META.lastFile||null,dirty:META.dirty||0}),flush:()=>saving,lock:()=>showLock(false)};
 })();

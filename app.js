@@ -520,7 +520,7 @@ function openEditor(id){
 const BB_BASE = "https://jazm-belegbox.github.io/";
 const b64url = t => btoa(String.fromCharCode(...new TextEncoder().encode(t))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 function bbLink(d){
-  const here = location.origin + location.pathname.replace(/index\.html$/, "");
+  const here = window.MBX_EMBED ? "https://jazm-smartbox.github.io/" : location.origin + location.pathname.replace(/index\.html$/, "");
   const p = {k: "d", ref: "mysmartbox:" + d.id, url: here + "?ref=" + encodeURIComponent(d.id), what: "Raum, Grundriss und Bedienung", name: d.name || "", raum: d.room || "", kategorie: "Technik"};
   return BB_BASE + "#neu=" + b64url(JSON.stringify(p));
 }
@@ -546,7 +546,7 @@ function renderEditor(){
       <div class="field"><label>Gruppen</label><div class="gpick">${state.groups.map(g=>`<button type="button" class="rchip" data-act="tgl-group" data-g="${g.id}" aria-pressed="${draft.groups.includes(g.id) || (g.autoTypes || []).includes(draft.type)}" ${(g.autoTypes || []).includes(draft.type) ? `disabled title="Automatisch: alle ${esc((TYPES[draft.type] || TYPES.other)[0])}-Geräte gehören dazu"` : ""}>${groupIcon}${esc(g.name)}</button>`).join("")}
         ${newGroupOpen?`<span class="gnew"><input id="f-newgroup" placeholder="z. B. Weihnachtsdeko" aria-label="Name der neuen Gruppe"><button type="button" class="btn small primary" data-act="add-group-ed">Anlegen</button></span>`:`<button type="button" class="rchip gadd" data-act="new-group-ed">+ Neue Gruppe</button>`}</div></div>
       <div class="field"><label for="f-note">Notiz</label><input id="f-note" value="${esc(draft.note)}" placeholder="z. B. hinter dem Schrank, Szene „Abends“"></div>
-      ${bbLinkHtml(draft)}
+      ${window.MBXA&&MBXA.bbHtml?MBXA.bbHtml(draft):bbLinkHtml(draft)}
       ${(() => { const hp = draft.help || {}, sg = helpSuggest(draft), has = hp.manual || hp.pair || hp.reset;
         return `<details class="helpbox" ${has ? "open" : ""}><summary>Störungshilfe${has ? " ✓" : ""}</summary>
         <div class="field"><label for="f-hman">Von Hand bedienen</label><textarea id="f-hman" rows="2" placeholder="${esc(sg?.manual || "z. B. Taste am Gerät kurz drücken")}">${esc(hp.manual || "")}</textarea></div>
@@ -1544,7 +1544,7 @@ async function uploadPlan(file){
 
 
 /* ================= Spielereien ================= */
-const APP_LINK = "https://jazm-smartbox.github.io/";
+const APP_LINK = window.MBX_EMBED ? "https://jazm-box.github.io/" : "https://jazm-smartbox.github.io/";
 function buzz(p){ if (!fx.haptic || !navigator.vibrate) return; try { navigator.vibrate(p); } catch(_){} }
 
 /* --- Datenpuls über die Leiterbahnen --- */
